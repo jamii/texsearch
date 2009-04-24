@@ -1,4 +1,3 @@
-open Align
 open Tree
 
 let print_element element =
@@ -22,7 +21,7 @@ let print_element_forest forest =
 let run_query query index =
   List.fast_sort
     (fun (rank1,_) (rank2,_) -> compare rank1 rank2)
-    (Mtree.find_within 2 query index)
+    (Mtree.find_within 5 query index)
 
 let main =
   let preprocess = Preprocessor.init () in
@@ -40,7 +39,6 @@ let main =
       print_string ("Searching");
       flush stdout;
       let results = run_query query Index.index in
-      print_string "The top 3 results are:\n";
       let print_result (rank,tree) =
         print_string "Rank: "; print_int rank; print_string "\n";
         print_element_forest tree;

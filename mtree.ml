@@ -1,4 +1,4 @@
-let metric a b = Cache.with_cache Align.align_forest a b
+let metric a b = Cache.with_cache Edit.edit_distance a b
 
 type 'e branch =
   { neither : 'e mtree
