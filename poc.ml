@@ -1,14 +1,5 @@
-open Align_opt
-
-let discrete_metric a b =
-  if a = b
-  then 0.
-  else 1.
-
-let rec size tree =
-  match tree with
-    | Empty -> 0.
-    | Branch (_,children) -> 1. +. (sum (List.map size children))
+open Align
+open Tree
 
 let print_element element =
   match element with
@@ -28,12 +19,10 @@ let print_element_tree tree =
 let print_element_forest forest =
   List.iter print_element_tree forest
 
-let align = Cache.with_cache align_forest
-
 let run_query query index =
   List.fast_sort
     (fun (rank1,_) (rank2,_) -> compare rank1 rank2)
-    (List.map (fun t -> print_string "."; flush stdout;((align query t) (*/. (size t)*), t)) index)
+    (Mtree.find_within 2 query index)
 
 let main =
   let preprocess = Preprocessor.init () in
@@ -52,15 +41,11 @@ let main =
       flush stdout;
       let results = run_query query Index.index in
       print_string "The top 3 results are:\n";
-      (match results with
-        | a::b::c::_ ->
-            let print_result (rank,tree) =
-              print_string "Rank: "; print_float rank; print_string "\n";
-              print_element_forest tree;
-              print_string "\n" in
-            print_result a;
-            print_result b;
-            print_result c);
+      let print_result (rank,tree) =
+        print_string "Rank: "; print_int rank; print_string "\n";
+        print_element_forest tree;
+        print_string "\n" in
+      List.iter print_result results
     with Xml.Error err ->
       print_string (Xml.error err); print_string "\n";
       print_string prep in

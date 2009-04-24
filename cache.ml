@@ -1,10 +1,17 @@
+open Tree
+module CacheMap = Map.Make (
+struct
+  type t = (element forest * element forest)
+  let compare = compare
+end)
+
 let with_cache f =
-    let cache = Hashtbl.create 5000 in
-    let rec cached a b =
-        try
-            Hashtbl.find cache (a,b)
-        with Not_found ->
-            let result = f cached a b in
-            Hashtbl.add cache (a,b) result;
-            result in
-    cached
+  let cache = ref CacheMap.empty in
+  let rec cached a b =
+    try
+      CacheMap.find (a,b) !cache
+    with Not_found ->
+      let result = f cached a b in
+      cache := CacheMap.add (a,b) result !cache;
+      result in
+  cached
