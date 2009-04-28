@@ -2,10 +2,15 @@ open Tree
 
 type index_element =
   { forest : element forest
-  ; path_lengths : Histogram.t }
+  ; path_lengths : Histogram.t
+  ; cost : float }
 
-let query_metric a b = Cache.with_cache Edit.edit_distance a.forest b.forest
-let index_metric a b = Histogram.l1_norm a.path_lengths b.path_lengths
+let weighted_metric metric a b = 1.0 /. (1.0 +. a.cost +. b.cost -. (metric a b))
+let query_metric = (fun a b -> (Cache.with_cache Edit.left_edit_distance a.forest b.forest))
+let index_metric = (fun a b -> (Cache.with_cache Edit.edit_distance a.forest b.forest))
+(*(fun a b -> float_of_int (Histogram.l1_norm a.path_lengths b.path_lengths))*)
+
+let blob_dist = 3.0
 
 type 'e branch =
   { neither : 'e mtree
@@ -15,9 +20,8 @@ type 'e branch =
 
 and 'e mtree =
   | Empty
-  | Element of 'e
-  | Branch of 'e * 'e * int * 'e branch
-
+  | Blob of 'e * ('e list)
+  | Branch of 'e * 'e * float * 'e branch
 
 let empty = Empty
 
@@ -30,12 +34,17 @@ let empty_branch =
 let add forest mtree =
   let e =
     { forest = forest
-    ; path_lengths = Histogram.path_lengths 10 forest } in
+    ; path_lengths = Histogram.path_lengths 10 forest
+    ; cost = Metric.cost_of_forest forest } in
   print_string "."; flush stdout;
   let rec addE mtree =
     match mtree with
-    | Empty -> Element e
-    | Element e' -> Branch (e, e', (index_metric e e'), empty_branch)
+    | Empty -> Blob e
+    | Blob (e',es) ->
+        let dist = index_metric e e' in
+        if dist < blob_cutoff
+        then Blob (e',e::es)
+        else List.fold_left (fun mtree e -> add e mtree) (Branch (e, e', (index_metric e e'), empty-branch)) es
     | Branch (l,r,radius,branch) ->
           let branch = match ((index_metric e l) < radius, (index_metric e r) < radius) with
             | (false,false) -> {branch with neither = addE branch.neither}
@@ -45,26 +54,98 @@ let add forest mtree =
           Branch (l,r,radius,branch) in
    addE mtree
 
-(* Use dlist appends or this will blow up*)
-let find_within dist forest mtree =
+type 'e search =
+  { target : 'e
+  ; unsearched : ('e mtree, float) Pqueue.t
+  ; sorting : ('e, float) Pqueue.t
+  ; sorted : ('e, float) Pqueue.t
+  ; min_dist : float}
+
+let search forest mtree =
   let e =
     { forest = forest
-    ; path_lengths = Histogram.path_lengths 10 forest } in
-  let rec find_in mtree =
-    print_string "."; flush stdout;
-    match mtree with
-    | Empty -> []
-    | Element e' ->
-        let distE = index_metric e e' in
-        if distE < dist then [e'] else []
-    | Branch (l,r,radius,branch) ->
-        let distL, distR = index_metric e l, index_metric e r in
-        (if distL < dist then [l] else []) @
-        (if distR < dist then [r] else []) @
-        (if (distL >= radius - dist) && (distR >= radius - dist) then find_in branch.neither else []) @
-        (if (distL <  radius + dist) && (distR >= radius - dist) then find_in branch.left    else []) @
-        (if (distL >= radius - dist) && (distR <  radius + dist) then find_in branch.right   else []) @
-        (if (distL <  radius - dist) && (distR <  radius - dist) then find_in branch.both    else []) in
-  Util.filter_map (fun e' -> let rank = query_metric e e' in if rank < dist then Some (rank,e'.forest) else None) (find_in mtree)
+    ; path_lengths = Histogram.path_lengths 10 forest
+    ; cost = Metric.cost_of_forest forest } in
+  { target = e
+  ; unsearched =
+      (match mtree with
+        | Empty -> Pqueue.empty
+        | _ -> Pqueue.add mtree 0.0 Pqueue.empty)
+  ; sorting = Pqueue.empty
+  ; sorted = Pqueue.empty
+  ; min_dist = 0.0 }
+
+let insert_result e cutoff search =
+  if dist < cutoff
+  then
+    if dist < search.min_dist
+    then {search with sorted = Pqueue.add e dist search.sorted}
+    else {search with sorting = Pqueue.add e dist search.sorting}
+  else search
+
+let insert_results es dist cutoff search =
+  List.fold_left (fun search e -> insert_result e (query_metric search.target e) cutoff search) search es
+
+let update_min_dist dist search =
+  let min_dist = max search.min_dist dist in
+  let (safe_results,rest) = Pqueue.split_at_priority min_dist search.sorting in
+  {search with sorted = search.sorted @ safe_results; sorting = rest; min_dist = min_dist}
+
+let next_search_node cutoff search =
+  if search.min_dist > cutoff
+  then None
+  else
+    match Pqueue.pop search.unsearched with
+      | None -> None
+      | Some ((mtree,dist),unsearched) ->
+          Some (mtree, update_min_dist dist {search with unsearched = unsearched})
+
+type 'e result =
+  | More of ('e * float) list * 'e search
+  | Last of ('e * float) list
+
+let next k cutoff search =
+  let rec loop search =
+    match Pqueue.split_at_length k (search.sorted) with
+      (* We have enough results to return *)
+      | Some (results,rest) -> More (results, {search with sorted = rest})
+      (* We need to carry on searching *)
+      | None ->
+          match next_search_node cutoff search with
+            (* Nothing left to search *)
+            | None -> Last (Pqueue.to_list search.sorted)
+            (* Search in mtree *)
+            | Some (mtree,search) ->
+                match mtree with
+                  | Empty -> loop search
+                  | Blob (e',es) -> loop (insert_results (e'::es) cutoff search)
+                  | Branch (l,r,radius,branch) ->
+                      let distL = query_metric search.target l in
+                      let distR = query_metric search.target r in
+                      loop
+                      (insert_result l distL cutoff
+                      (insert_result r distR cutoff
+                      {search with unsearched =
+                        (Pqueue.add branch.neither (max 0.0 (radius -. (min distL distR)))
+                        (Pqueue.add branch.left (max 0.0 (distL -. radius))
+                        (Pqueue.add branch.right (max 0.0 (distR -. radius))
+                        (Pqueue.add branch.both (max 0.0 ((max distL distR) -. radius))
+                        search.unsearched))))})) in
+  loop search
 
 let make_index str = List.fold_left (fun mtree e -> add e mtree) empty (Tree.parse_results str)
+
+let print_mtree mtree =
+  let rec loop space mtree =
+    print_string space;
+    match mtree with
+      | Empty -> print_string "( )\n"
+      | Blob (_,es) -> print_string "("; print_int (List.size es); print_string ")\n"
+      | Branch (_,_,_,branch) ->
+          print_string "|\\\n";
+          let space = "  "^space in
+          loop space branch.neither;
+          loop space branch.left;
+          loop space branch.right;
+          loop space branch.both in
+  loop "" mtree

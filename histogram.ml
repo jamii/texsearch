@@ -14,8 +14,7 @@ let path_lengths n forest =
           hist.(0) <- hist.(0) + 1; 0
       | Branch (_,cs) ->
           let path_length = (1 + maximum (List.map fill_hist cs)) mod n in
-          hist.(path_length) <- hist.(path_length) + 1;
-          path_length in
+          hist.(path_length) <- hist.(path_length) + 1; path_length in
   ignore (List.map fill_hist forest);
   Array.to_list hist
 

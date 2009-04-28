@@ -1,3 +1,4 @@
+open Mtree
 open Tree
 
 let print_element element =
@@ -19,12 +20,17 @@ let print_element_forest forest =
   List.iter print_element_tree forest
 
 let run_query query index =
+  let cost = -. (Metric.cost_of_forest query) in
   List.fast_sort
     (fun (rank1,_) (rank2,_) -> compare rank1 rank2)
-    (Mtree.find_within 5 query index)
+    (List.map (fun (e,rank) -> (rank,e.forest))
+    (match next 10 ((Metric.cost_of_forest query) *. 3.0) (search query index) with
+      | Last results -> results
+      | More (results,_) -> results))
 
 let main =
   let preprocess = Preprocessor.init () in
+  print_mtree Index.index;
   print_string "Welcome to texsearch\n";
   print_string "Enter a LaTeX string (all on one line)\n";
   print_string "eg. $$\\dot{V}$$\n";
@@ -40,7 +46,7 @@ let main =
       flush stdout;
       let results = run_query query Index.index in
       let print_result (rank,tree) =
-        print_string "Rank: "; print_int rank; print_string "\n";
+        print_string "Rank: "; print_float rank; print_string "\n";
         print_element_forest tree;
         print_string "\n" in
       List.iter print_result results
