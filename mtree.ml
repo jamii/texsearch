@@ -6,11 +6,10 @@ type index_element =
   ; cost : float }
 
 let weighted_metric metric a b = 1.0 /. (1.0 +. a.cost +. b.cost -. (metric a b))
-let query_metric = (fun a b -> (Cache.with_cache Edit.left_edit_distance a.forest b.forest))
-let index_metric = (fun a b -> (Cache.with_cache Edit.edit_distance a.forest b.forest))
-(*(fun a b -> float_of_int (Histogram.l1_norm a.path_lengths b.path_lengths))*)
+let query_metric = (fun a b -> (Cache.with_cache Edit.edit_distance a.forest b.forest))
+let index_metric = (fun a b -> float_of_int (Histogram.l1_norm a.path_lengths b.path_lengths))
 
-let blob_dist = 3.0
+let blob_cutoff = 0.5
 
 type 'e branch =
   { neither : 'e mtree
@@ -31,20 +30,19 @@ let empty_branch =
   ; right = empty
   ; neither = empty }
 
-let add forest mtree =
-  let e =
-    { forest = forest
-    ; path_lengths = Histogram.path_lengths 10 forest
-    ; cost = Metric.cost_of_forest forest } in
-  print_string "."; flush stdout;
+let rec add e mtree =
+  print_string "\n"; flush stdout;
   let rec addE mtree =
+    print_string "."; flush stdout;
     match mtree with
-    | Empty -> Blob e
+    | Empty -> Blob (e,[])
     | Blob (e',es) ->
         let dist = index_metric e e' in
         if dist < blob_cutoff
         then Blob (e',e::es)
-        else List.fold_left (fun mtree e -> add e mtree) (Branch (e, e', (index_metric e e'), empty-branch)) es
+        else
+          (print_int (List.length es);
+          List.fold_left (fun mtree e -> add e mtree) (Branch (e, e', (index_metric e e'), empty_branch)) es)
     | Branch (l,r,radius,branch) ->
           let branch = match ((index_metric e l) < radius, (index_metric e r) < radius) with
             | (false,false) -> {branch with neither = addE branch.neither}
@@ -75,7 +73,7 @@ let search forest mtree =
   ; sorted = Pqueue.empty
   ; min_dist = 0.0 }
 
-let insert_result e cutoff search =
+let insert_result e dist cutoff search =
   if dist < cutoff
   then
     if dist < search.min_dist
@@ -83,7 +81,7 @@ let insert_result e cutoff search =
     else {search with sorting = Pqueue.add e dist search.sorting}
   else search
 
-let insert_results es dist cutoff search =
+let insert_results es cutoff search =
   List.fold_left (fun search e -> insert_result e (query_metric search.target e) cutoff search) search es
 
 let update_min_dist dist search =
@@ -106,6 +104,7 @@ type 'e result =
 
 let next k cutoff search =
   let rec loop search =
+    print_string "."; flush stdout;
     match Pqueue.split_at_length k (search.sorted) with
       (* We have enough results to return *)
       | Some (results,rest) -> More (results, {search with sorted = rest})
@@ -133,16 +132,22 @@ let next k cutoff search =
                         search.unsearched))))})) in
   loop search
 
-let make_index str = List.fold_left (fun mtree e -> add e mtree) empty (Tree.parse_results str)
+let make_index str =
+  List.fold_left (fun mtree forest ->
+      let e =
+        { forest = forest
+        ; path_lengths = Histogram.path_lengths 10 forest
+        ; cost = Metric.cost_of_forest forest } in add e mtree)
+    empty (Tree.parse_results str)
 
 let print_mtree mtree =
   let rec loop space mtree =
     print_string space;
     match mtree with
       | Empty -> print_string "( )\n"
-      | Blob (_,es) -> print_string "("; print_int (List.size es); print_string ")\n"
-      | Branch (_,_,_,branch) ->
-          print_string "|\\\n";
+      | Blob (_,es) -> print_string "("; print_int (List.length es); print_string ")\n"
+      | Branch (_,_,radius,branch) ->
+          print_float radius; print_string "|\\\n";
           let space = "  "^space in
           loop space branch.neither;
           loop space branch.left;
