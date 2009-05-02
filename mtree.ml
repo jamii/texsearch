@@ -1,12 +1,17 @@
-open Tree
-
 type index_element =
-  { forest : element forest
+  { id : string
+  ; fragment : Latex.fragment
   ; path_lengths : Histogram.t
   ; cost : float }
 
+let index_element id fragment =
+    { id = id
+    ; fragment = fragment
+    ; path_lengths = Histogram.path_lengths 10 fragment
+    ; cost = Edit.cost_of_fragment fragment }
+
 let weighted_metric metric a b = 1.0 /. (1.0 +. a.cost +. b.cost -. (metric a b))
-let query_metric = (fun a b -> (Cache.with_cache Edit.edit_distance a.forest b.forest))
+let query_metric = (fun a b -> (Edit.with_cache Edit.edit_distance a.fragment b.fragment))
 let index_metric = (fun a b -> float_of_int (Histogram.l1_norm a.path_lengths b.path_lengths))
 
 let blob_cutoff = 0.5
@@ -31,18 +36,14 @@ let empty_branch =
   ; neither = empty }
 
 let rec add e mtree =
-  print_string "\n"; flush stdout;
   let rec addE mtree =
-    print_string "."; flush stdout;
     match mtree with
     | Empty -> Blob (e,[])
     | Blob (e',es) ->
         let dist = index_metric e e' in
         if dist < blob_cutoff
         then Blob (e',e::es)
-        else
-          (print_int (List.length es);
-          List.fold_left (fun mtree e -> add e mtree) (Branch (e, e', (index_metric e e'), empty_branch)) es)
+        else List.fold_left (fun mtree e -> add e mtree) (Branch (e, e', (index_metric e e'), empty_branch)) es
     | Branch (l,r,radius,branch) ->
           let branch = match ((index_metric e l) < radius, (index_metric e r) < radius) with
             | (false,false) -> {branch with neither = addE branch.neither}
@@ -59,11 +60,8 @@ type 'e search =
   ; sorted : ('e, float) Pqueue.t
   ; min_dist : float}
 
-let search forest mtree =
-  let e =
-    { forest = forest
-    ; path_lengths = Histogram.path_lengths 10 forest
-    ; cost = Metric.cost_of_forest forest } in
+let search fragment mtree =
+  let e = index_element "" fragment in
   { target = e
   ; unsearched =
       (match mtree with
@@ -131,14 +129,6 @@ let next k cutoff search =
                         (Pqueue.add branch.both (max 0.0 ((max distL distR) -. radius))
                         search.unsearched))))})) in
   loop search
-
-let make_index str =
-  List.fold_left (fun mtree forest ->
-      let e =
-        { forest = forest
-        ; path_lengths = Histogram.path_lengths 10 forest
-        ; cost = Metric.cost_of_forest forest } in add e mtree)
-    empty (Tree.parse_results str)
 
 let print_mtree mtree =
   let rec loop space mtree =

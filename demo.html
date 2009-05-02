@@ -1,0 +1,32 @@
+<textarea id="latex">$$\ifmmode\dot{V}\else\.\fi$$</textarea>
+
+<body>
+  <a href="javascript:parseGet()">Parse</a>
+  <p></p>
+  <div id="results"></div>
+</body>
+
+<script type='text/javascript' charset='utf-8'>
+  var parseRequest = null;
+  var latex = document.getElementById("latex");
+  var results = document.getElementById("results");
+
+  function parseGet()
+  {
+    var url = "/documents/_external/parse?latex=" + latex.value;
+
+    parseRequest = new XMLHttpRequest();
+    parseRequest.onreadystatechange = function () {callback(parseRequest);};
+    parseRequest.open("GET",url);
+    parseRequest.send( null );
+  }
+
+  function callback(request)
+  {
+    if (request.readyState == 4 && request.status == 200) {
+      results.textContent = request.responseText
+    } else if (request.readyState == 4 && request.status != 200) {
+      results.textContent = "Error " + request.status + " : " + request.responseText
+    }
+  }
+</script>
