@@ -10,13 +10,15 @@ let run_query fragment limit cutoff =
 let handle_get args =
   let fragment, limit, cutoff =
     try
-        Latex.fragment_of_json (List.assoc "latex" args) ,
+        (match (List.assoc "latex" args) with
+          | Json_type.String latex ->
+              Latex.fragment_of_json (Json_io.json_of_string latex)) ,
         (match (List.assoc "limit" args) with
           | Json_type.String limit -> int_of_string limit) ,
         (match (List.assoc "cutoff" args) with
           | Json_type.String cutoff -> float_of_string cutoff)
     with
-      | Not_found | Failure _ | Latex.Bad_latex -> raise Bad_request in
+      | Json_type.Json_error _ | Not_found | Failure _ | Latex.Bad_latex -> raise Bad_request in
   Json_type.Array
     (List.map
       (fun (id,rank) -> Json_type.Array [Json_type.String id ; Json_type.Float rank])
@@ -25,17 +27,19 @@ let handle_get args =
 let handle_put args =
   let fragment, id =
     try
-      Latex.fragment_of_json (List.assoc "latex" args) ,
+      (match (List.assoc "latex" args) with
+          | Json_type.String latex ->
+              Latex.fragment_of_json (Json_io.json_of_string latex)) ,
       match (List.assoc "id" args) with
         | Json_type.String id -> id
     with
-      | Not_found | Latex.Bad_latex -> raise Bad_request in
+      | Json_type.Json_error _ | Not_found | Latex.Bad_latex -> raise Bad_request in
   index := Mtree.add (Mtree.node id fragment) !index;
-  Json_type.Null
+  Json_type.String "OK"
 
 let handle_request request =
     try
-      match Json_io.json_of_string ~recursive:true request with
+      match Json_io.json_of_string request with
         | Json_type.Object fields ->
             (* args *)
             let args = match List.assoc "query" fields with
@@ -59,6 +63,6 @@ let handle_requests () =
       Json_io.string_of_json ~compact:true
         (Json_type.Object
           [ ("code",code)
-          ; ("response",response) ]) in
+          ; ("json",response) ]) in
     print_string output; print_string "\n"; flush stdout
   done

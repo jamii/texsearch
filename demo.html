@@ -1,14 +1,24 @@
-<textarea id="latex">$$\ifmmode\dot{V}\else\.\fi$$</textarea>
-
 <body>
-  <a href="javascript:parseGet()">Parse</a>
-  <p></p>
+  <div><a href="javascript:parseGet()">Parse</a> latex source:</div>
+  <textarea id="latex">$$\ifmmode\dot{V}\else\.\fi$$</textarea>
+  <div id="parsed"></div>
+
+  <div><a href="javascript:indexGet()">Search</a> in the database</div>
+
+  <div><a href="javascript:indexPut()">Add</a> to the database (remember to set the id first)</div>
+  <div>Id:<input id="id" type='text'></textarea></div>
+
+  <div>Results:</div>
   <div id="results"></div>
+
 </body>
 
 <script type='text/javascript' charset='utf-8'>
   var parseRequest = null;
+  var indexRequest = null;
   var latex = document.getElementById("latex");
+  var parsed = document.getElementById("parsed");
+  var id = document.getElementById("id");
   var results = document.getElementById("results");
 
   function parseGet()
@@ -16,17 +26,46 @@
     var url = "/documents/_external/parse?latex=" + latex.value;
 
     parseRequest = new XMLHttpRequest();
-    parseRequest.onreadystatechange = function () {callback(parseRequest);};
+    parseRequest.onreadystatechange = parseCallback;
     parseRequest.open("GET",url);
     parseRequest.send( null );
   }
 
-  function callback(request)
+  function parseCallback()
   {
-    if (request.readyState == 4 && request.status == 200) {
-      results.textContent = request.responseText
-    } else if (request.readyState == 4 && request.status != 200) {
-      results.textContent = "Error " + request.status + " : " + request.responseText
+    if (parseRequest.readyState == 4 && parseRequest.status == 200) {
+      parsed.textContent = parseRequest.responseText
+    } else if (parseRequest.readyState == 4 && parseRequest.status != 200) {
+      parsed.textContent = "Error " + parseRequest.status + " : " + parseRequest.responseText
+    }
+  }
+
+  function indexGet()
+  {
+    var url = "/documents/_external/index?limit=10&cutoff=5&latex=" + parsed.textContent;
+
+    indexRequest = new XMLHttpRequest();
+    indexRequest.onreadystatechange = indexCallback;
+    indexRequest.open("GET",url);
+    indexRequest.send( null );
+  }
+
+  function indexPut()
+  {
+    var url = "/documents/_external/index?latex=" + parsed.textContent + "&id=" + id.value;
+
+    indexRequest = new XMLHttpRequest();
+    indexRequest.onreadystatechange = indexCallback;
+    indexRequest.open("PUT",url);
+    indexRequest.send( null );
+  }
+
+  function indexCallback()
+  {
+    if (indexRequest.readyState == 4 && indexRequest.status == 200) {
+      results.textContent = indexRequest.responseText
+    } else if (indexRequest.readyState == 4 && indexRequest.status != 200) {
+      results.textContent = "Error " + indexRequest.status + " : " + indexRequest.responseText
     }
   }
 </script>
