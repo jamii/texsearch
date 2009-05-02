@@ -30,5 +30,7 @@ let split_at_priority priority rs =
       | (r,p)::rs ->
           if p < priority
           then loop (Dlist.snoc (r,p) ls) rs
-          else (Dlist.to_list ls, rs) in
+          else (Dlist.to_list ls, (r,p)::rs) in
   loop Dlist.empty rs
+
+let append ls rs = ls @ rs

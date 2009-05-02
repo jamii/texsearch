@@ -1,10 +1,12 @@
-type index_element =
-  { id : string
+type id = string
+
+type node =
+  { id : id
   ; fragment : Latex.fragment
   ; path_lengths : Histogram.t
   ; cost : float }
 
-let index_element id fragment =
+let node id fragment =
     { id = id
     ; fragment = fragment
     ; path_lengths = Histogram.path_lengths 10 fragment
@@ -16,16 +18,16 @@ let index_metric = (fun a b -> float_of_int (Histogram.l1_norm a.path_lengths b.
 
 let blob_cutoff = 0.5
 
-type 'e branch =
-  { neither : 'e mtree
-  ; left : 'e mtree
-  ; right : 'e mtree
-  ; both : 'e mtree }
+type branch =
+  { neither : mtree
+  ; left : mtree
+  ; right : mtree
+  ; both : mtree }
 
-and 'e mtree =
+and mtree =
   | Empty
-  | Blob of 'e * ('e list)
-  | Branch of 'e * 'e * float * 'e branch
+  | Blob of node * (node list)
+  | Branch of node * node * float * branch
 
 let empty = Empty
 
@@ -53,15 +55,15 @@ let rec add e mtree =
           Branch (l,r,radius,branch) in
    addE mtree
 
-type 'e search =
-  { target : 'e
-  ; unsearched : ('e mtree, float) Pqueue.t
-  ; sorting : ('e, float) Pqueue.t
-  ; sorted : ('e, float) Pqueue.t
+type search =
+  { target : node
+  ; unsearched : (mtree, float) Pqueue.t
+  ; sorting : (id, float) Pqueue.t
+  ; sorted : (id, float) Pqueue.t
   ; min_dist : float}
 
 let search fragment mtree =
-  let e = index_element "" fragment in
+  let e = node "" fragment in
   { target = e
   ; unsearched =
       (match mtree with
@@ -80,7 +82,7 @@ let insert_result e dist cutoff search =
   else search
 
 let insert_results es cutoff search =
-  List.fold_left (fun search e -> insert_result e (query_metric search.target e) cutoff search) search es
+  List.fold_left (fun search e -> insert_result e.id (query_metric search.target e) cutoff search) search es
 
 let update_min_dist dist search =
   let min_dist = max search.min_dist dist in
@@ -96,13 +98,12 @@ let next_search_node cutoff search =
       | Some ((mtree,dist),unsearched) ->
           Some (mtree, update_min_dist dist {search with unsearched = unsearched})
 
-type 'e result =
-  | More of ('e * float) list * 'e search
-  | Last of ('e * float) list
+type result =
+  | More of (id * float) list * search
+  | Last of (id * float) list
 
 let next k cutoff search =
   let rec loop search =
-    print_string "."; flush stdout;
     match Pqueue.split_at_length k (search.sorted) with
       (* We have enough results to return *)
       | Some (results,rest) -> More (results, {search with sorted = rest})
@@ -110,7 +111,10 @@ let next k cutoff search =
       | None ->
           match next_search_node cutoff search with
             (* Nothing left to search *)
-            | None -> Last (Pqueue.to_list search.sorted)
+            | None ->
+                (match search.sorting with
+                  | [] -> Last (Pqueue.to_list search.sorted)
+                  | _ -> loop {search with sorted = Pqueue.append search.sorted search.sorting; sorting = Pqueue.empty})
             (* Search in mtree *)
             | Some (mtree,search) ->
                 match mtree with
@@ -120,8 +124,8 @@ let next k cutoff search =
                       let distL = query_metric search.target l in
                       let distR = query_metric search.target r in
                       loop
-                      (insert_result l distL cutoff
-                      (insert_result r distR cutoff
+                      (insert_result l.id distL cutoff
+                      (insert_result r.id distR cutoff
                       {search with unsearched =
                         (Pqueue.add branch.neither (max 0.0 (radius -. (min distL distR)))
                         (Pqueue.add branch.left (max 0.0 (distL -. radius))

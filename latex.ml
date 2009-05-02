@@ -33,24 +33,13 @@ let parse_xml str =
 
 (* Parsing elements from json *)
 exception Bad_latex
-exception Bad_query
 
 let rec element_of_json json =
   match json with
-    | Json_type.Object [(field,json)] -> Command (field,fragment_of_json json)
+    | Json_type.Object ((field,json)::rest) -> Command (field,fragment_of_json json)
     | Json_type.String str -> Text str
     | _ -> raise Bad_latex
 and fragment_of_json json =
   match json with
     | Json_type.Array jsons -> List.map element_of_json jsons
     | _ -> raise Bad_latex
-
-let fragment_of_query json =
-  try
-    match json with
-      | Json_type.Object fields ->
-          match List.assoc "query" fields with
-            | Json_type.Object fields ->
-                fragment_of_json (List.assoc "latex" fields)
-  with
-    | Json_type.Json_error _ | Not_found | Match_failure _ -> raise Bad_query

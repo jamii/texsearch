@@ -1,0 +1,1 @@
+let _ = Index.handle_requests ()

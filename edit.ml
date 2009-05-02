@@ -25,10 +25,10 @@ let rec edit_distance cached fL fR =
     | (csL, []) -> cost_of_fragment csL
     | ([], csR) -> cost_of_fragment csR
     | (cL::csL, cR::csR) ->
-        minimum [
-          (metric None (Some cR)) +. (cached fL ((children cR) @ csR)) ;
-          (metric (Some cL) None) +. (cached ((children cL) @ csL) fR) ;
-          (metric (Some cL) (Some cR)) +. (cached ((children cL) @ csL) ((children cR) @ csR)) ]
+        minimum
+          [ (metric None (Some cR)) +. (cached fL ((children cR) @ csR))
+          ; (metric (Some cL) None) +. (cached ((children cL) @ csL) fR)
+          ; (metric (Some cL) (Some cR)) +. (cached ((children cL) @ csL) ((children cR) @ csR)) ]
 
 module CacheMap = Map.Make (
 struct
