@@ -55,6 +55,8 @@ let rec add e mtree =
           Branch (l,r,radius,branch) in
    addE mtree
 
+let delete e mtree = mtree (* Fill in *)
+
 type search =
   { target : node
   ; unsearched : (mtree, float) Pqueue.t
