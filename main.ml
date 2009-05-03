@@ -1,4 +1,4 @@
-let _ = Index.handle_requests ()
+let _ = Index.run_handlers ()
 
 (*let _ =
   while true do

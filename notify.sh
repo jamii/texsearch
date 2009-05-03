@@ -1,0 +1,1 @@
+cat > /home/jamie/texsearch/notify

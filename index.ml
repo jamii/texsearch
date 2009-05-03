@@ -2,67 +2,45 @@ exception Bad_request
 
 let index = ref Mtree.empty
 
+type json query_args =
+  < query :
+    < latex : string
+    ; limit : string
+    ; cutoff : string > >
+
+type json query_results = (string * float) list
+
 let run_query fragment limit cutoff =
   match Mtree.next limit cutoff (Mtree.search fragment !index) with
     | Mtree.Last results -> results
     | Mtree.More (results,_) -> results
 
-let handle_get args =
-  let fragment, limit, cutoff =
+let handle_query str =
+  let response, code =
     try
-        (match (List.assoc "latex" args) with
-          | Json_type.String latex ->
-              Latex.fragment_of_json (Json_io.json_of_string latex)) ,
-        (match (List.assoc "limit" args) with
-          | Json_type.String limit -> int_of_string limit) ,
-        (match (List.assoc "cutoff" args) with
-          | Json_type.String cutoff -> float_of_string cutoff)
+      let query = (query_args_of_json (Json_io.json_of_string str))#query in
+      let fragment = Latex.fragment_of_json (Json_io.json_of_string query#latex) in
+      let limit = int_of_string query#limit in
+      let cutoff = float_of_string query#cutoff in
+      json_of_query_results (run_query fragment limit cutoff), Json_type.Int 200 (* OK *)
     with
-      | Json_type.Json_error _ | Not_found | Failure _ | Latex.Bad_latex -> raise Bad_request in
-  Json_type.Array
-    (List.map
-      (fun (id,rank) -> Json_type.Array [Json_type.String id ; Json_type.Float rank])
-      (run_query fragment limit cutoff))
+      | Json_type.Json_error _ | Latex.Bad_latex | Failure _ -> Json_type.Null, Json_type.Int 400 (* Bad request *)
+      | _ -> Json_type.Null, Json_type.Int 500 (* Internal server error *) in
+  let output =
+    Json_io.string_of_json ~compact:true
+      (Json_type.Object
+        [ ("code",code)
+        ; ("json",response) ]) in
+  print_string (output ^ "\n"); flush stdout
 
-let handle_put args =
-  let fragment, id =
-    try
-      (match (List.assoc "latex" args) with
-          | Json_type.String latex ->
-              Latex.fragment_of_json (Json_io.json_of_string latex)) ,
-      match (List.assoc "id" args) with
-        | Json_type.String id -> id
-    with
-      | Json_type.Json_error _ | Not_found | Latex.Bad_latex -> raise Bad_request in
-  index := Mtree.add (Mtree.node id fragment) !index;
-  Json_type.String "OK"
-
-let handle_request request =
-    try
-      match Json_io.json_of_string request with
-        | Json_type.Object fields ->
-            (* args *)
-            let args = match List.assoc "query" fields with
-              | Json_type.Object args -> args in
-            (* verb *)
-            match List.assoc "verb" fields with
-              | Json_type.String "PUT" -> handle_put args
-              | Json_type.String "GET" -> handle_get args
-    with Json_type.Json_error _ | Match_failure _ | Not_found -> raise Bad_request
-
-let handle_requests () =
+let run_handlers () =
+  let notify = Unix.openfile "/home/jamie/texsearch/notify" [Unix.O_RDONLY;Unix.O_NONBLOCK] 0o666 in
+  let handle file =
+    let input = input_line (Unix.in_channel_of_descr file) in
+    if file = Unix.stdin
+    then handle_query input
+    else () (* Handle updates *) in
   while true do
-    let request = read_line () in
-    let response, code =
-      try
-        handle_request request, Json_type.Int 200 (* OK *)
-      with
-        | Bad_request -> Json_type.Null, Json_type.Int 400 (* Bad request *)
-        | _ -> Json_type.Null, Json_type.Int 500 (* Internal server error *) in
-    let output =
-      Json_io.string_of_json ~compact:true
-        (Json_type.Object
-          [ ("code",code)
-          ; ("json",response) ]) in
-    print_string output; print_string "\n"; flush stdout
+    let (files,_,_) = Unix.select [notify;Unix.stdin] [] [] (-1.0) in
+    List.iter handle files
   done
