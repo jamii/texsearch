@@ -1,4 +1,4 @@
-<body>
+<body id="body">
   <div><a href="javascript:parseGet()">Search</a></div>
   <textarea id="latex">$$\ifmmode\dot{V}\else\.\fi$$</textarea>
 
@@ -11,6 +11,7 @@
   var parseRequest = null;
   var indexRequest = null;
   var resultsRequest = null;
+  var body = document.getElementById("body");
   var latex = document.getElementById("latex");
   var results = document.getElementById("results");
 
@@ -54,18 +55,29 @@
 
   function resultsGet(ids)
   {
-    var url = "/documents/_design/views/_view/results";
+    var url = "/documents/_design/demo/_view/results";
 
     resultsRequest = new XMLHttpRequest();
     resultsRequest.onreadystatechange = resultsCallback;
     resultsRequest.open("POST",url);
-    resultsRequest.send( ids );
+    resultsRequest.send("{\"keys\":" + ids + "}");
   }
 
 function resultsCallback()
   {
     if (resultsRequest.readyState == 4 && resultsRequest.status == 200) {
-      results.textContent = resultsRequest.responseText
+      response = eval("(" + resultsRequest.responseText + ")"); /* Yes, this is a bad thing to do */
+
+      body.removeChild(results);
+      results = document.createElement('div');
+      function displayRow(row) {
+        var p = document.createElement('p');
+        p.textContent = row.value;
+        results.appendChild(p)
+      }
+      response.rows.forEach(displayRow);
+      body.appendChild(results);
+
     } else if (resultsRequest.readyState == 4 && resultsRequest.status != 200) {
       results.textContent = "Error " + resultsRequest.status + " : " + resultsRequest.responseText
     }
