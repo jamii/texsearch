@@ -1,12 +1,6 @@
 <body>
-  <div><a href="javascript:parseGet()">Parse</a> latex source:</div>
+  <div><a href="javascript:parseGet()">Search</a></div>
   <textarea id="latex">$$\ifmmode\dot{V}\else\.\fi$$</textarea>
-  <div id="parsed"></div>
-
-  <div><a href="javascript:indexGet()">Search</a> in the database</div>
-
-  <div><a href="javascript:indexPut()">Add</a> to the database (remember to set the id first)</div>
-  <div>Id:<input id="id" type='text'></textarea></div>
 
   <div>Results:</div>
   <div id="results"></div>
@@ -16,9 +10,8 @@
 <script type='text/javascript' charset='utf-8'>
   var parseRequest = null;
   var indexRequest = null;
+  var resultsRequest = null;
   var latex = document.getElementById("latex");
-  var parsed = document.getElementById("parsed");
-  var id = document.getElementById("id");
   var results = document.getElementById("results");
 
   function parseGet()
@@ -34,15 +27,15 @@
   function parseCallback()
   {
     if (parseRequest.readyState == 4 && parseRequest.status == 200) {
-      parsed.textContent = parseRequest.responseText
+      indexGet(parseRequest.responseText)
     } else if (parseRequest.readyState == 4 && parseRequest.status != 200) {
-      parsed.textContent = "Error " + parseRequest.status + " : " + parseRequest.responseText
+      results.textContent = "Error " + parseRequest.status + " : " + parseRequest.responseText
     }
   }
 
-  function indexGet()
+  function indexGet(latex)
   {
-    var url = "/documents/_external/index?limit=10&cutoff=5&latex=" + parsed.textContent;
+    var url = "/documents/_external/index?limit=10&cutoff=5&latex=" + latex;
 
     indexRequest = new XMLHttpRequest();
     indexRequest.onreadystatechange = indexCallback;
@@ -50,22 +43,31 @@
     indexRequest.send( null );
   }
 
-  function indexPut()
-  {
-    var url = "/documents/_external/index?latex=" + parsed.textContent + "&id=" + id.value;
-
-    indexRequest = new XMLHttpRequest();
-    indexRequest.onreadystatechange = indexCallback;
-    indexRequest.open("PUT",url);
-    indexRequest.send( null );
-  }
-
   function indexCallback()
   {
     if (indexRequest.readyState == 4 && indexRequest.status == 200) {
-      results.textContent = indexRequest.responseText
+      resultsGet(indexRequest.responseText)
     } else if (indexRequest.readyState == 4 && indexRequest.status != 200) {
       results.textContent = "Error " + indexRequest.status + " : " + indexRequest.responseText
+    }
+  }
+
+  function resultsGet(ids)
+  {
+    var url = "/documents/_design/views/_view/results";
+
+    resultsRequest = new XMLHttpRequest();
+    resultsRequest.onreadystatechange = resultsCallback;
+    resultsRequest.open("POST",url);
+    resultsRequest.send( ids );
+  }
+
+function resultsCallback()
+  {
+    if (resultsRequest.readyState == 4 && resultsRequest.status == 200) {
+      results.textContent = resultsRequest.responseText
+    } else if (resultsRequest.readyState == 4 && resultsRequest.status != 200) {
+      results.textContent = "Error " + resultsRequest.status + " : " + resultsRequest.responseText
     }
   }
 </script>
