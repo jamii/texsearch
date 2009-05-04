@@ -3,7 +3,6 @@
 import string, re
 from plasTeX import TeXFragment
 from plasTeX.DOM import Node
-from xml.sax import saxutils
 
 class Renderer(dict):
     def render(self,node,output):
@@ -86,61 +85,78 @@ def processTeX(string):
 
     return document
 
-import os, sys
+import os, sys, httplib
 from xml.dom import minidom
-
-def processIndex():
-    # Bulk process a xml docuement
-    out = open("/home/jamie/texsearch/index.ml","w")
-    out.write("let index = Mtree.make_index \"")
-    out.write("<results>")
-    doc = minidom.parse("exs.xml")
-    for item in doc.childNodes[0].childNodes:
-        if item.nodeName == u'result':
-            for eqnode in item.childNodes[1:]:
-                textnode = eqnode.childNodes[0]
-                tex = textnode.wholeText
-                result = []
-                renderer.render(processTeX("\\begin{document}"+tex+"\\end{document}"),result)
-                out.write(json.dumps(result))
-                out.write("\n")
-    out.write("</results>")
-    out.write("\"")
-    out.close()
-
 try:
     # Python 2.6
     import json
 except:
     # Prior to 2.6 requires simplejson
     import simplejson as json
+# Bulk process a xml document
+def processXml(fileName):
+    conn = httplib.HTTPConnection("localhost:5984")
+    headers = {"Content-type": "application/json"}
 
-def queries():
-    # 'for line in sys.stdin' won't work here
+    docs = minidom.parse(fileName)
+    for item in docs.childNodes[0].childNodes:
+        if item.nodeName == u'result':
+            doi = item.childNodes[0].childNodes[0].wholeText
+            for node in item.childNodes[1:]:
+                source = node.childNodes[0].wholeText
+
+                content = []
+                renderer.render(processTeX("\\begin{document}"+source+"\\end{document}"),content)
+
+                doc = json.dumps({'doi': doi, 'source': source, 'content': content})
+                conn.request("POST", "/documents", doc, headers)
+                response = conn.getresponse()
+                if response.status != 201:
+                    # What status codes are acceptable here?
+                    raise IOError
+                response.read() # Have to read before next request
+    conn.close()
+
+def search(query):
+    conn = httplib.HTTPConnection("localhost:5984")
+    headers = {"Content-type": "application/json"}
+    conn.request("GET", "/documents/_external/index", json.dumps(query), headers)
+    response = conn.getresponse()
+    if response.status != 200:
+        # What status codes are acceptable here?
+        raise IOError
+    conn.request("POST", "documents/_all_docs?include_docs=true", {keys : response.read()}, headers)
+    response = conn.getresponse()
+    if response.status != 200:
+        # What status codes are acceptable here?
+        raise IOError
+    return response.read()
+
+def requests():
     line = sys.stdin.readline()
     while line:
         yield json.loads(line)
         line = sys.stdin.readline()
 
-def respond(query):
-    # Add response codes
+def respond(request):
     try:
-      latex = query['query']['latex']
-      response = []
-      renderer.render(processTeX("\\begin{document}"+latex+"\\end{document}"),response)
-      code = 200 # OK
+      query = request['query']
+      latex = query['latex']
+      parseResults = []
+      renderer.render(processTeX("\\begin{document}"+latex+"\\end{document}"),parseResults)
+      response = json.dumps({'json':parseResults, 'code':200}) # OK
+      #query['latex'] = json.dumps(parseResults)
+      #response = "{\"json\":%s, \"code\":200}" % search(query)
     except KeyError:
-      response = {'error':'Bad request'}
-      code = 400 # Bad request
-    except Exception, exception:
-      response = {'error':unicode(exception)}
-      code = 500 # Internal server error
-    sys.stdout.write("%s\n" % json.dumps({'json':response, 'code':code}))
+      response = json.dumps({'json':{'error':'Bad request'}, 'code':400}) # Bad request
+    #except Exception, exception:
+      #response = json.dumps({'json':{'error':unicode(exception)}, 'code':500}) # Internal server error
+    sys.stdout.write("%s\n" % response)
     sys.stdout.flush()
 
 def main():
-    for query in queries():
-        respond(query)
+    for request in requests():
+        respond(request)
 
 if __name__ == "__main__":
     main()
