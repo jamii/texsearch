@@ -2,18 +2,18 @@ type id = string
 
 type node =
   { id : id
-  ; fragment : Latex.fragment
+  ; latex : Latex.t
   ; path_lengths : Histogram.t
   ; cost : float }
 
-let node id fragment =
+let node id latex =
     { id = id
-    ; fragment = fragment
-    ; path_lengths = Histogram.path_lengths 10 fragment
-    ; cost = Edit.cost_of_fragment fragment }
+    ; latex = latex
+    ; path_lengths = Histogram.path_lengths 10 latex
+    ; cost = Edit.cost_of_latex latex }
 
 let weighted_metric metric a b = 1.0 /. (1.0 +. a.cost +. b.cost -. (metric a b))
-let query_metric = (fun a b -> (Edit.with_cache Edit.edit_distance a.fragment b.fragment))
+let query_metric = (fun a b -> (Edit.with_cache Edit.edit_distance a.latex b.latex))
 let index_metric = (fun a b -> float_of_int (Histogram.l1_norm a.path_lengths b.path_lengths))
 
 let blob_cutoff = 0.5
@@ -47,15 +47,34 @@ let rec add e mtree =
         then Blob (e',e::es)
         else List.fold_left (fun mtree e -> add e mtree) (Branch (e, e', (index_metric e e'), empty_branch)) es
     | Branch (l,r,radius,branch) ->
+        let branch = match ((index_metric e l) < radius, (index_metric e r) < radius) with
+          | (false,false) -> {branch with neither = addE branch.neither}
+          | (true, false) -> {branch with left    = addE branch.left}
+          | (false,true ) -> {branch with right   = addE branch.right}
+          | (true, true ) -> {branch with both    = addE branch.both} in
+        Branch (l,r,radius,branch) in
+   addE mtree
+
+let delete id mtree = mtree
+(*  let rec del mtree =
+    match mtree with
+    | Empty -> Empty
+    | Blob (e,es) ->
+        if e.id = id
+        then
+          match es with
+            | [] -> Empty
+            | (e::es) -> Blob (e,es)
+        else Blob (e, List.filter (fun e -> e.id = id) es)
+    | Branch (l,r,radius,branch) ->
+
           let branch = match ((index_metric e l) < radius, (index_metric e r) < radius) with
             | (false,false) -> {branch with neither = addE branch.neither}
             | (true, false) -> {branch with left    = addE branch.left}
             | (false,true ) -> {branch with right   = addE branch.right}
             | (true, true ) -> {branch with both    = addE branch.both} in
           Branch (l,r,radius,branch) in
-   addE mtree
-
-let delete e mtree = mtree (* Fill in *)
+   addE mtree*)
 
 type search =
   { target : node
@@ -64,8 +83,8 @@ type search =
   ; sorted : (id, float) Pqueue.t
   ; min_dist : float}
 
-let search fragment mtree =
-  let e = node "" fragment in
+let search latex mtree =
+  let e = node "" latex in
   { target = e
   ; unsearched =
       (match mtree with
@@ -136,7 +155,7 @@ let next k cutoff search =
                         search.unsearched))))})) in
   loop search
 
-let print_mtree mtree =
+let print mtree =
   let rec loop space mtree =
     print_string space;
     match mtree with

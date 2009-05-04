@@ -11,19 +11,19 @@ let metric a b =
         | (Command (c1,_), Command (c2,_)) -> if c1 = c2 then 0.0 else 2.0
         | _ -> 2.0
 
-let rec cost_of_fragment fragment =
-  sum_float (List.map cost_of_element fragment)
+let rec cost_of_latex latex =
+  sum_float (List.map cost_of_element latex)
 
 and cost_of_element element =
   match element with
     | Text _ -> 1.0
-    | Command (_,fragment) -> 1.0 +. cost_of_fragment fragment
+    | Command (_,latex) -> 1.0 +. cost_of_latex latex
 
 let rec edit_distance cached fL fR =
   match (fL,fR) with
     | ([], []) -> 0.0
-    | (csL, []) -> cost_of_fragment csL
-    | ([], csR) -> cost_of_fragment csR
+    | (csL, []) -> cost_of_latex csL
+    | ([], csR) -> cost_of_latex csR
     | (cL::csL, cR::csR) ->
         minimum
           [ (metric None (Some cR)) +. (cached fL ((children cR) @ csR))
@@ -32,7 +32,7 @@ let rec edit_distance cached fL fR =
 
 module CacheMap = Map.Make (
 struct
-  type t = (Latex.fragment * Latex.fragment)
+  type t = (Latex.t * Latex.t)
   let compare = compare
 end)
 
