@@ -1,8 +1,11 @@
 #!/bin/env python
 
 import string, re
-from plasTeX import TeXFragment
+from plasTeX import TeXFragment, Environment
 from plasTeX.DOM import Node
+
+class begin(Environment):
+  pass
 
 class Renderer(dict):
     def render(self,node,output):
@@ -66,6 +69,7 @@ renderer['math'] = renderer.ignore
 renderer['text'] = renderer.ignore
 renderer['nulldelimiterspace'] = renderer.ignore
 renderer['vphantom'] = renderer.ignore
+renderer['align'] = renderer.ignore
 renderer['aligned'] = renderer.ignore
 renderer['gathered'] = renderer.ignore
 renderer['active::&'] = renderer.ignore
@@ -81,9 +85,7 @@ def processTeX(string):
     # Instantiate a TeX processor and parse the input text
     tex = TeX()
     tex.input(string)
-    document = tex.parse()
-
-    return document
+    return tex.parse()
 
 import os, sys, httplib
 from xml.dom import minidom
@@ -145,8 +147,6 @@ def respond(request):
       parseResults = []
       renderer.render(processTeX("\\begin{document}"+latex+"\\end{document}"),parseResults)
       response = json.dumps({'json':parseResults, 'code':200}) # OK
-      #query['latex'] = json.dumps(parseResults)
-      #response = "{\"json\":%s, \"code\":200}" % search(query)
     except KeyError:
       response = json.dumps({'json':{'error':'Bad request'}, 'code':400}) # Bad request
     #except Exception, exception:
