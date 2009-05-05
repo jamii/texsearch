@@ -13,7 +13,7 @@ let node_of id latex =
 let query_metric a b = Edit.left_edit_distance a.suffixes b.suffixes
 let index_metric a b = Edit.left_edit_distance a.suffixes b.suffixes
 
-let blob_cutoff = 5
+let blob_cutoff = 0
 
 type branch =
   { neither : mtree

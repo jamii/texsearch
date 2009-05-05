@@ -17,7 +17,7 @@
 
   function parseGet()
   {
-    var url = "/documents/_external/parse?latex=" + latex.value;
+    var url = "/documents/_external/parse?latex=" + escape(latex.value);
 
     parseRequest = new XMLHttpRequest();
     parseRequest.onreadystatechange = parseCallback;
@@ -36,7 +36,7 @@
 
   function indexGet(latex)
   {
-    var url = "/documents/_external/index?limit=10&cutoff=30&latex=" + latex;
+    var url = "/documents/_external/index?limit=10&cutoff=5&latex=" + escape(latex);
 
     indexRequest = new XMLHttpRequest();
     indexRequest.onreadystatechange = indexCallback;

@@ -3,9 +3,9 @@ open Latex
 
 let metric a b =
   match (a,b) with
-    | (Text ta, Text tb) -> if ta = tb then 0 else 5
-    | (Command (ca,_), Command (cb,_)) -> if ca = cb then 0 else 5
-    | _ -> 5
+    | (Text ta, Text tb) -> if ta = tb then 0 else 1
+    | (Command (ca,_), Command (cb,_)) -> if ca = cb then 0 else 1
+    | _ -> 1
 
 let suffixes forest =
   let rec loop forest =
@@ -40,19 +40,30 @@ let left_edit_distance suffixL suffixR =
 (*   let suffixL, suffixR = suffixes forestL, suffixes forestR in *)
   let maxl, maxr = Array.length suffixL, Array.length suffixR in
   let cache = Array.make_matrix (maxl + 1) (maxr + 1) 0 in
+  (* Must match everything on the left *)
   for l = maxl - 1 downto 0 do
-(*     let tL = suffixL.(l) in *)
-    cache.(l).(maxr) <- 5 + cache.(l+1).(maxr)
+    cache.(l).(maxr) <- 1 + cache.(l+1).(maxr)
   done;
-  for l = maxl - 1 downto 0 do
+  (* General matching *)
+  for l = maxl - 1 downto 1 do
     for r = maxr - 1 downto 0 do
       let tL, tR = suffixL.(l), suffixR.(r) in
       cache.(l).(r) <-
           minimum
             [ 1 + cache.(l).(r+1)
-            ; 5 + cache.(l+1).(r)
+            ; 1 + cache.(l+1).(r)
             ; (metric tL tR) + cache.(l+1).(r+1) ]
-  done done; cache.(0).(0)
+  done done;
+  (* Non-matches on the right dont count before left starts matching *)
+  for r = maxr - 1 downto 0 do
+    let tL, tR = suffixL.(0), suffixR.(r) in
+      cache.(0).(r) <-
+          minimum
+            [ cache.(0).(r+1)
+            ; 1 + cache.(1).(r)
+            ; (metric tL tR) + cache.(1).(r+1) ]
+  done;
+  cache.(0).(0)
 
 module CacheMap = Map.Make (
 struct
