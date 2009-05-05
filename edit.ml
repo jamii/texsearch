@@ -54,7 +54,7 @@ let left_edit_distance suffixL suffixR =
             ; 1 + cache.(l+1).(r)
             ; (metric tL tR) + cache.(l+1).(r+1) ]
   done done;
-  (* Non-matches on the right dont count before left starts matching *)
+  (* Non-matches on the right dont count until left starts matching *)
   for r = maxr - 1 downto 0 do
     let tL, tR = suffixL.(0), suffixR.(r) in
       cache.(0).(r) <-

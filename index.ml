@@ -51,15 +51,15 @@ let run_query latex limit cutoff =
 
 let handle_query str =
   let response, code =
-    (*try*)
+    try
       let query = (query_args_of_json (Json_io.json_of_string str))#query in
       let latex = Latex.of_json (Json_io.json_of_string query#latex) in
       let limit = int_of_string query#limit in
       let cutoff = int_of_string query#cutoff in
       json_of_ids (run_query latex limit cutoff), Json_type.Int 200 (* OK *)
-    (*with
+    with
       | Json_type.Json_error _ | Latex.Bad_latex | Failure _ -> Json_type.Null, Json_type.Int 400 (* Bad request *)
-      | _ -> Json_type.Null, Json_type.Int 500 (* Internal server error *)*) in
+      | _ -> Json_type.Null, Json_type.Int 500 (* Internal server error *) in
   let output =
     Json_io.string_of_json ~compact:true
       (Json_type.Object

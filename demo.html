@@ -1,6 +1,6 @@
 <body id="body">
-  <div><a href="javascript:parseGet()">Search</a></div>
-  <textarea id="latex">$$\ifmmode\dot{V}\else\.\fi$$</textarea>
+  <textarea id="latex">$$dot{V}O_2$$</textarea>
+  <div><button onclick="javascript:parseGet()">Search</button></div>
 
   <div>Results:</div>
   <div id="results"></div>
@@ -71,8 +71,13 @@ function resultsCallback()
       body.removeChild(results);
       results = document.createElement('div');
       function displayRow(row) {
+        var a = document.createElement('a');
+        a.textContent = row.value[0];
+        a.href = "http://www.springerlink.com/content?k=doi%3a(" + row.value[0] + ")";
+        results.appendChild(a);
+
         var p = document.createElement('p');
-        p.textContent = row.value;
+        p.textContent = row.value[1];
         results.appendChild(p)
       }
       response.rows.forEach(displayRow);
