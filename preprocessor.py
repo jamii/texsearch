@@ -69,6 +69,10 @@ renderer['math'] = renderer.ignore
 renderer['text'] = renderer.ignore
 renderer['nulldelimiterspace'] = renderer.ignore
 renderer['vphantom'] = renderer.ignore
+renderer['hphantom'] = renderer.ignore
+renderer['hfill'] = renderer.ignore
+renderer['vfill'] = renderer.ignore
+renderer['hbox'] = renderer.ignore
 renderer['align'] = renderer.ignore
 renderer['aligned'] = renderer.ignore
 renderer['gathered'] = renderer.ignore
@@ -76,6 +80,11 @@ renderer['active::&'] = renderer.ignore
 renderer['\\'] = renderer.ignore
 renderer['#document'] = renderer.ignore
 renderer['document'] = renderer.ignore
+renderer['left'] = renderer.ignore
+renderer['right'] = renderer.ignore
+renderer['langle'] = renderer.ignore
+renderer['rangle'] = renderer.ignore
+
 
 # Pair up left + right
 
