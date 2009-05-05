@@ -3,32 +3,56 @@ open Latex
 
 let metric a b =
   match (a,b) with
-    | (None, Some b) -> 1.0
-    | (Some a, None) -> 1.0
-    | (Some a, Some b) ->
-      match (a,b) with
-        | (Text t1, Text t2) -> if t1 = t2 then 0.0 else 2.0
-        | (Command (c1,_), Command (c2,_)) -> if c1 = c2 then 0.0 else 2.0
-        | _ -> 2.0
+    | (Text ta, Text tb) -> if ta = tb then 0 else 5
+    | (Command (ca,_), Command (cb,_)) -> if ca = cb then 0 else 5
+    | _ -> 5
 
-let rec cost_of_latex latex =
-  sum_float (List.map cost_of_element latex)
+let suffixes forest =
+  let rec loop forest =
+    match forest with
+      | [] -> []
+      | (t::ts) -> t :: (loop ((children t) @ ts)) in
+  Array.of_list (loop forest)
 
-and cost_of_element element =
-  match element with
-    | Text _ -> 1.0
-    | Command (_,latex) -> 1.0 +. cost_of_latex latex
+(*let edit_distance forestL forestR =
+  let suffixL, suffixR = suffixes forestL, suffixes forestR in
+  let maxl, maxr = Array.length suffixL, Array.length suffixR in
+  let cache = Array.make_matrix (maxl + 1) (maxr + 1) 0 in
+  for l = maxl - 1 downto 0 do
+    let tL = suffixL.(l) in
+    cache.(l).(maxr) <- (metric (Some tL) None) + cache.(l+1).(maxr)
+  done;
+  for r = maxr - 1 downto 0 do
+    let tR = suffixR.(r) in
+    cache.(maxl).(r) <- (metric None (Some tR)) + cache.(maxl).(r+1)
+  done;
+  for l = maxl - 1 downto 0 do
+    for r = maxr - 1 downto 0 do
+      let tL, tR = suffixL.(l), suffixR.(r) in
+      cache.(l).(r) <-
+          minimum
+            [ (metric None (Some tR)) + cache.(l).(r+1)
+            ; (metric (Some tL) None) + cache.(l+1).(r)
+            ; (metric (Some tL) (Some tR)) + cache.(l+1).(r+1) ]
+  done done; cache.(0).(0)*)
 
-let rec edit_distance cached fL fR =
-  match (fL,fR) with
-    | ([], []) -> 0.0
-    | (csL, []) -> cost_of_latex csL
-    | ([], csR) -> cost_of_latex csR
-    | (cL::csL, cR::csR) ->
-        minimum
-          [ (metric None (Some cR)) +. (cached fL ((children cR) @ csR))
-          ; (metric (Some cL) None) +. (cached ((children cL) @ csL) fR)
-          ; (metric (Some cL) (Some cR)) +. (cached ((children cL) @ csL) ((children cR) @ csR)) ]
+let left_edit_distance suffixL suffixR =
+(*   let suffixL, suffixR = suffixes forestL, suffixes forestR in *)
+  let maxl, maxr = Array.length suffixL, Array.length suffixR in
+  let cache = Array.make_matrix (maxl + 1) (maxr + 1) 0 in
+  for l = maxl - 1 downto 0 do
+(*     let tL = suffixL.(l) in *)
+    cache.(l).(maxr) <- 5 + cache.(l+1).(maxr)
+  done;
+  for l = maxl - 1 downto 0 do
+    for r = maxr - 1 downto 0 do
+      let tL, tR = suffixL.(l), suffixR.(r) in
+      cache.(l).(r) <-
+          minimum
+            [ 1 + cache.(l).(r+1)
+            ; 5 + cache.(l+1).(r)
+            ; (metric tL tR) + cache.(l+1).(r+1) ]
+  done done; cache.(0).(0)
 
 module CacheMap = Map.Make (
 struct

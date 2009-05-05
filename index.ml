@@ -1,6 +1,6 @@
 exception Bad_request
 
-let index = ref Mtree.empty
+let index = ref Mtree.Empty
 
 (* Types and json parsing *)
 
@@ -55,7 +55,7 @@ let handle_query str =
       let query = (query_args_of_json (Json_io.json_of_string str))#query in
       let latex = Latex.of_json (Json_io.json_of_string query#latex) in
       let limit = int_of_string query#limit in
-      let cutoff = float_of_string query#cutoff in
+      let cutoff = int_of_string query#cutoff in
       json_of_ids (run_query latex limit cutoff), Json_type.Int 200 (* OK *)
     (*with
       | Json_type.Json_error _ | Latex.Bad_latex | Failure _ -> Json_type.Null, Json_type.Int 400 (* Bad request *)
@@ -76,13 +76,13 @@ let handle_update str =
       | "create" ->
           (match update#doc with
             | Some doc ->
-                index := Mtree.add (Mtree.node update#id doc#content) !index)
+                index := Mtree.add (Mtree.node_of update#id doc#content) !index)
       | "delete" ->
           index := Mtree.delete update#id !index
       | "update" ->
           (match update#doc with
             | Some doc ->
-                index := Mtree.add (Mtree.node update#id doc#content) (Mtree.delete update#id !index))
+                index := Mtree.add (Mtree.node_of update#id doc#content) (Mtree.delete update#id !index))
   with _ -> raise Fixme
 
 (*  *)
@@ -94,9 +94,9 @@ let init_index () =
   let add_doc index row =
     try
       let doc = document_of_json row#doc in
-      Mtree.add (Mtree.node row#id doc#content) index
+      Mtree.add (Mtree.node_of row#id doc#content) index
     with _ -> index in
-  List.fold_left add_doc Mtree.empty docs
+  List.fold_left add_doc Mtree.Empty docs
 
 let run_handlers () =
   index := init_index ();

@@ -3,20 +3,17 @@ type id = string
 type node =
   { id : id
   ; latex : Latex.t
-  ; path_lengths : Histogram.t
-  ; cost : float }
+  ; suffixes : Latex.element array }
 
-let node id latex =
+let node_of id latex =
     { id = id
     ; latex = latex
-    ; path_lengths = Histogram.path_lengths 10 latex
-    ; cost = Edit.cost_of_latex latex }
+    ; suffixes = Edit.suffixes latex }
 
-let weighted_metric metric a b = 1.0 /. (1.0 +. a.cost +. b.cost -. (metric a b))
-let query_metric = (fun a b -> (Edit.with_cache Edit.edit_distance a.latex b.latex))
-let index_metric = (fun a b -> float_of_int (Histogram.l1_norm a.path_lengths b.path_lengths))
+let query_metric a b = Edit.left_edit_distance a.suffixes b.suffixes
+let index_metric a b = Edit.left_edit_distance a.suffixes b.suffixes
 
-let blob_cutoff = 0.5
+let blob_cutoff = 5
 
 type branch =
   { neither : mtree
@@ -27,7 +24,7 @@ type branch =
 and mtree =
   | Empty
   | Blob of node * (node list)
-  | Branch of node * node * float * branch
+  | Branch of node * node * int * branch
 
 let empty = Empty
 
@@ -38,7 +35,9 @@ let empty_branch =
   ; neither = empty }
 
 let rec add e mtree =
+(*   print_string "\n"; flush stdout; *)
   let rec addE mtree =
+(*     print_string "."; flush stdout; *)
     match mtree with
     | Empty -> Blob (e,[])
     | Blob (e',es) ->
@@ -78,21 +77,21 @@ let delete id mtree = mtree
 
 type search =
   { target : node
-  ; unsearched : (mtree, float) Pqueue.t
-  ; sorting : (id, float) Pqueue.t
-  ; sorted : (id, float) Pqueue.t
-  ; min_dist : float}
+  ; unsearched : (mtree, int) Pqueue.t
+  ; sorting : (id, int) Pqueue.t
+  ; sorted : (id, int) Pqueue.t
+  ; min_dist : int}
 
 let search latex mtree =
-  let e = node "" latex in
+  let e = node_of "" latex in
   { target = e
   ; unsearched =
       (match mtree with
         | Empty -> Pqueue.empty
-        | _ -> Pqueue.add mtree 0.0 Pqueue.empty)
+        | _ -> Pqueue.add mtree 0 Pqueue.empty)
   ; sorting = Pqueue.empty
   ; sorted = Pqueue.empty
-  ; min_dist = 0.0 }
+  ; min_dist = 0 }
 
 let insert_result e dist cutoff search =
   if dist < cutoff
@@ -120,8 +119,8 @@ let next_search_node cutoff search =
           Some (mtree, update_min_dist dist {search with unsearched = unsearched})
 
 type result =
-  | More of (id * float) list * search
-  | Last of (id * float) list
+  | More of (id * int) list * search
+  | Last of (id * int) list
 
 let next k cutoff search =
   let rec loop search =
@@ -148,10 +147,10 @@ let next k cutoff search =
                       (insert_result l.id distL cutoff
                       (insert_result r.id distR cutoff
                       {search with unsearched =
-                        (Pqueue.add branch.neither (max 0.0 (radius -. (min distL distR)))
-                        (Pqueue.add branch.left (max 0.0 (distL -. radius))
-                        (Pqueue.add branch.right (max 0.0 (distR -. radius))
-                        (Pqueue.add branch.both (max 0.0 ((max distL distR) -. radius))
+                        (Pqueue.add branch.neither 0
+                        (Pqueue.add branch.left (distL - radius)
+                        (Pqueue.add branch.right (distR - radius)
+                        (Pqueue.add branch.both ((max distL distR) - radius)
                         search.unsearched))))})) in
   loop search
 
@@ -162,7 +161,7 @@ let print mtree =
       | Empty -> print_string "( )\n"
       | Blob (_,es) -> print_string "("; print_int (List.length es); print_string ")\n"
       | Branch (_,_,radius,branch) ->
-          print_float radius; print_string "|\\\n";
+          print_int radius; print_string "|\\\n";
           let space = "  "^space in
           loop space branch.neither;
           loop space branch.left;
