@@ -10,10 +10,7 @@ let node_of id latex =
     ; latex = latex
     ; suffixes = Edit.suffixes latex }
 
-let query_metric a b = Edit.left_edit_distance a.suffixes b.suffixes
-let index_metric a b = Edit.left_edit_distance a.suffixes b.suffixes
-
-let blob_cutoff = 0
+let query_dist a b = Edit.left_edit_distance a.suffixes b.suffixes
 
 type branch =
   { neither : mtree
@@ -23,7 +20,7 @@ type branch =
 
 and mtree =
   | Empty
-  | Blob of node * (node list)
+  | Element of node
   | Branch of node * node * int * branch
 
 let empty = Empty
@@ -39,14 +36,11 @@ let rec add e mtree =
   let rec addE mtree =
 (*     print_string "."; flush stdout; *)
     match mtree with
-    | Empty -> Blob (e,[])
-    | Blob (e',es) ->
-        let dist = index_metric e e' in
-        if dist < blob_cutoff
-        then Blob (e',e::es)
-        else List.fold_left (fun mtree e -> add e mtree) (Branch (e, e', (index_metric e e'), empty_branch)) es
+    | Empty -> Element e
+    | Element e' ->
+        Branch (e, e', (query_dist e e'), empty_branch)
     | Branch (l,r,radius,branch) ->
-        let branch = match ((index_metric e l) < radius, (index_metric e r) < radius) with
+        let branch = match ((query_dist e l) < radius, (query_dist e r) < radius) with
           | (false,false) -> {branch with neither = addE branch.neither}
           | (true, false) -> {branch with left    = addE branch.left}
           | (false,true ) -> {branch with right   = addE branch.right}
@@ -58,16 +52,13 @@ let delete id mtree = mtree
 (*  let rec del mtree =
     match mtree with
     | Empty -> Empty
-    | Blob (e,es) ->
+    | Element e ->
         if e.id = id
-        then
-          match es with
-            | [] -> Empty
-            | (e::es) -> Blob (e,es)
-        else Blob (e, List.filter (fun e -> e.id = id) es)
+        then Empty
+        else Element e
     | Branch (l,r,radius,branch) ->
 
-          let branch = match ((index_metric e l) < radius, (index_metric e r) < radius) with
+          let branch = match ((dist e l) < radius, (dist e r) < radius) with
             | (false,false) -> {branch with neither = addE branch.neither}
             | (true, false) -> {branch with left    = addE branch.left}
             | (false,true ) -> {branch with right   = addE branch.right}
@@ -100,9 +91,6 @@ let insert_result e dist cutoff search =
     then {search with sorted = Pqueue.add e dist search.sorted}
     else {search with sorting = Pqueue.add e dist search.sorting}
   else search
-
-let insert_results es cutoff search =
-  List.fold_left (fun search e -> insert_result e.id (query_metric search.target e) cutoff search) search es
 
 let update_min_dist dist search =
   let min_dist = max search.min_dist dist in
@@ -139,10 +127,10 @@ let next k cutoff search =
             | Some (mtree,search) ->
                 match mtree with
                   | Empty -> loop search
-                  | Blob (e',es) -> loop (insert_results (e'::es) cutoff search)
+                  | Element e -> loop (insert_result e.id (query_dist search.target e) cutoff search)
                   | Branch (l,r,radius,branch) ->
-                      let distL = query_metric search.target l in
-                      let distR = query_metric search.target r in
+                      let distL = query_dist search.target l in
+                      let distR = query_dist search.target r in
                       loop
                       (insert_result l.id distL cutoff
                       (insert_result r.id distR cutoff
@@ -159,7 +147,7 @@ let print mtree =
     print_string space;
     match mtree with
       | Empty -> print_string "( )\n"
-      | Blob (_,es) -> print_string "("; print_int (List.length es); print_string ")\n"
+      | Element _ -> print_string "(*)\n"
       | Branch (_,_,radius,branch) ->
           print_int radius; print_string "|\\\n";
           let space = "  "^space in
