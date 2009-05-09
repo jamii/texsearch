@@ -26,7 +26,9 @@ ignoreSet = frozenset([
 ,'left'
 ,'right'
 ,'langle'
-,'rangle'])
+,'rangle'
+,'rm'
+,'par'])
 
 def clean(node,output):
   # Short circuit text nodes
@@ -50,7 +52,8 @@ def clean(node,output):
         if key == 'self' or key == '*modifier*':
           continue
         if value.__class__ is TeXFragment:
-          clean(value,children)
+          for child in value.childNodes:
+            clean(child,children)
         else:
           children.append(unicode(value))
 
@@ -70,37 +73,3 @@ def preprocess(string):
   result = []
   clean(tex.parse(),result)
   return result
-
-import sys, httplib
-from xml.dom import minidom
-try:
-  # Python 2.6
-  import json
-except:
-  # Prior to 2.6 requires simplejson
-  import simplejson as json
-
-# Bulk process a xml document
-def preprocessXml(fileName):
-  xml = minidom.parse(fileName)
-  docs = []
-  for item in xml.childNodes[0].childNodes:
-    if item.nodeName == u'result':
-      doi = item.childNodes[0].childNodes[0].wholeText
-      for node in item.childNodes[1:]:
-        source = node.childNodes[0].wholeText
-        content = preprocess("\\begin{document}"+source+"\\end{document}")
-        doc = {'doi': doi, 'source': source, 'content': content}
-        docs.append(doc)
-
-  conn = httplib.HTTPConnection("localhost:5984")
-  headers = {"Content-type": "application/json"}
-  conn.request("POST", "/documents/_bulk_docs", json.dumps({'all-or-nothing':True, 'docs':docs}), headers)
-  response = conn.getresponse()
-  if response.status != 201:
-    # What status codes are acceptable here?
-    raise IOError
-  conn.close()
-
-if __name__ == '__main__':
-    preprocessXml("exs.xml")
