@@ -24,7 +24,7 @@ and root =
 
 and mtree =
   | Empty
-  | Element of node
+  | Blob of node * node list
   | Branch of root * root * int * branch
 
 let empty = Empty
@@ -42,9 +42,12 @@ let root_of node =
 let rec add node mtree =
   let rec loop mtree =
     match mtree with
-    | Empty -> Element node
-    | Element e ->
-        Branch (root_of node, root_of e, (query_dist node e), empty_branch)
+    | Empty -> Blob (node,[])
+    | Blob (e,es) ->
+        let dist = query_dist node e in
+        if dist < 5
+        then Blob (e,node::es)
+        else List.fold_left (fun mtree node -> add node mtree) (Branch (root_of node, root_of e, dist, empty_branch)) es
     | Branch (l,r,radius,branch) ->
         let branch = match ((query_dist node l.node) < radius, (query_dist node r.node) < radius) with
           | (false,false) -> {branch with neither = loop branch.neither}
@@ -58,10 +61,11 @@ let delete id mtree =
   let rec loop mtree =
     match mtree with
     | Empty -> Empty
-    | Element e ->
+    | Blob (e,es) ->
+        let es = List.filter (fun e -> e.id != id) es in
         if e.id = id
-        then Empty
-        else Element e
+        then List.fold_left (fun mtree node -> add node mtree) Empty es
+        else Blob (e,es)
     | Branch (l,r,radius,branch) ->
         let l = if l.node.id = id then {l with deleted = true} else l in
         let r = if r.node.id = id then {r with deleted = true} else r in
@@ -101,6 +105,9 @@ let insert_result e dist search =
     else {search with sorting = Pqueue.add e dist search.sorting}
   else search
 
+let insert_results nodes search =
+  List.fold_left (fun search node -> insert_result node.id (query_dist search.target node) search) search nodes
+
 let update_min_dist dist search =
   let min_dist = max search.min_dist dist in
   let (safe_results,rest) = Pqueue.split_at_priority min_dist search.sorting in
@@ -136,7 +143,10 @@ let next k search =
             | Some (mtree,search) ->
                 match mtree with
                   | Empty -> loop search
-                  | Element e -> loop (insert_result e.id (query_dist search.target e) search)
+                  | Blob (e,es) ->
+                      loop
+                        (insert_result e.id (query_dist search.target e)
+                        (insert_results es search))
                   | Branch (l,r,radius,branch) ->
                       let distL = query_dist search.target l.node in
                       let distR = query_dist search.target r.node in
@@ -156,7 +166,7 @@ let print mtree =
     print_string space;
     match mtree with
       | Empty -> print_string "( )\n"
-      | Element _ -> print_string "(*)\n"
+      | Blob _ -> print_string "(*)\n"
       | Branch (_,_,radius,branch) ->
           print_int radius; print_string "|\\\n";
           let space = "  "^space in
