@@ -4,27 +4,17 @@ type id = string
 
 type node =
   { id : id
-  ; latex : Latex.t
-  ; suffixes : Latex.element array }
+  ; latex : Latex.t }
 
 let node_of id latex =
     { id = id
-    ; latex = latex
-    ; suffixes = Edit.suffixes latex }
+    ; latex = latex }
 
-let dist a b = Edit.left_edit_distance a.suffixes b.suffixes
+let dist a b = Edit.left_edit_distance a.latex b.latex
 
 type bktree =
   | Empty
   | Branch of node * bool * node list * bktree array
-
-let rec cost_of_latex latex =
-  Util.sum_int (List.map cost_of_element latex)
-
-and cost_of_element element =
-  match element with
-    | Text _ -> 1
-    | Command (_,latex) -> 1 + cost_of_latex latex
 
 let branch_size = 20
 let bucket_size = 5
@@ -52,8 +42,8 @@ let delete id bktree =
     | Empty -> Empty
     | Branch (root,del,bucket,branch) ->
         let del = if root.id = id then true else del in
-        let bucket = List.filter (fun node -> node.id /= id) bucket in
-        for i in 0 to branch_size do
+        let bucket = List.filter (fun node -> node.id != id) bucket in
+        for i = 0 to branch_size do
           branch.(i) <- loop branch.(i)
         done;
         Branch (root,del,bucket,branch) in
@@ -77,7 +67,7 @@ let search latex bktree =
   ; sorting = Pqueue.empty
   ; sorted = Pqueue.empty
   ; min_dist = 0
-  ; cutoff = (Array.length (node.suffixes) / 3) + 1}
+  ; cutoff = (Array.length (node.latex) / 3) + 1}
 
 let insert_result node d search =
   if d < search.cutoff
@@ -136,6 +126,6 @@ let next k search =
                       (match branch.(branch_size) with
                           | Empty -> ()
                           | Branch _ as b -> unsearched := Pqueue.add b 0 !unsearched);
-                      let search = if del then search else insert_result root.id d in
+                      let search = if del then search else insert_result root.id d search in
                       loop (insert_results bucket {search with unsearched = !unsearched}) in
   loop search
