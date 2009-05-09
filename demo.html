@@ -1,6 +1,6 @@
 <body id="body">
-  <textarea id="latex">$$dot{V}O_2$$</textarea>
-  <div><button onclick="javascript:parseGet()">Search</button></div>
+  <textarea id="latex">$$\dot{V}O_2$$</textarea>
+  <div><button onclick="javascript:search()">Search</button></div>
 
   <div>Results:</div>
   <div id="results"></div>
@@ -8,83 +8,43 @@
 </body>
 
 <script type='text/javascript' charset='utf-8'>
-  var parseRequest = null;
-  var indexRequest = null;
-  var resultsRequest = null;
+  var searchRequest = null;
   var body = document.getElementById("body");
   var latex = document.getElementById("latex");
   var results = document.getElementById("results");
 
-  function parseGet()
+  function search()
   {
-    var url = "/documents/_external/parse?latex=" + escape(latex.value);
+    var url = "/documents/_external/search?limit=10&latex=" + escape(latex.value);
 
-    parseRequest = new XMLHttpRequest();
-    parseRequest.onreadystatechange = parseCallback;
-    parseRequest.open("GET",url);
-    parseRequest.send( null );
+    searchRequest = new XMLHttpRequest();
+    searchRequest.onreadystatechange = searchCallback;
+    searchRequest.open("GET",url);
+    searchRequest.send( null );
   }
 
-  function parseCallback()
-  {
-    if (parseRequest.readyState == 4 && parseRequest.status == 200) {
-      indexGet(parseRequest.responseText)
-    } else if (parseRequest.readyState == 4 && parseRequest.status != 200) {
-      results.textContent = "Error " + parseRequest.status + " : " + parseRequest.responseText
-    }
-  }
+  function searchCallback()
+    {
+      if (searchRequest.readyState == 4 && searchRequest.status == 200) {
+        response = eval("(" + searchRequest.responseText + ")"); /* Yes, this is a bad thing to do */
 
-  function indexGet(latex)
-  {
-    var url = "/documents/_external/index?limit=10&cutoff=5&latex=" + escape(latex);
+        body.removeChild(results);
+        results = document.createElement('div');
+        function displayRow(row) {
+          var a = document.createElement('a');
+          a.textContent = row.value[0];
+          a.href = "http://www.springerlink.com/content?k=doi%3a(" + row.value[0] + ")";
+          results.appendChild(a);
 
-    indexRequest = new XMLHttpRequest();
-    indexRequest.onreadystatechange = indexCallback;
-    indexRequest.open("GET",url);
-    indexRequest.send( null );
-  }
+          var p = document.createElement('p');
+          p.textContent = row.value[1];
+          results.appendChild(p)
+        }
+        response.rows.forEach(displayRow);
+        body.appendChild(results);
 
-  function indexCallback()
-  {
-    if (indexRequest.readyState == 4 && indexRequest.status == 200) {
-      resultsGet(indexRequest.responseText)
-    } else if (indexRequest.readyState == 4 && indexRequest.status != 200) {
-      results.textContent = "Error " + indexRequest.status + " : " + indexRequest.responseText
-    }
-  }
-
-  function resultsGet(ids)
-  {
-    var url = "/documents/_design/demo/_view/results";
-
-    resultsRequest = new XMLHttpRequest();
-    resultsRequest.onreadystatechange = resultsCallback;
-    resultsRequest.open("POST",url);
-    resultsRequest.send("{\"keys\":" + ids + "}");
-  }
-
-function resultsCallback()
-  {
-    if (resultsRequest.readyState == 4 && resultsRequest.status == 200) {
-      response = eval("(" + resultsRequest.responseText + ")"); /* Yes, this is a bad thing to do */
-
-      body.removeChild(results);
-      results = document.createElement('div');
-      function displayRow(row) {
-        var a = document.createElement('a');
-        a.textContent = row.value[0];
-        a.href = "http://www.springerlink.com/content?k=doi%3a(" + row.value[0] + ")";
-        results.appendChild(a);
-
-        var p = document.createElement('p');
-        p.textContent = row.value[1];
-        results.appendChild(p)
+      } else if (resultsRequest.readyState == 4 && resultsRequest.status != 200) {
+        results.textContent = "Error " + resultsRequest.status + " : " + resultsRequest.responseText
       }
-      response.rows.forEach(displayRow);
-      body.appendChild(results);
-
-    } else if (resultsRequest.readyState == 4 && resultsRequest.status != 200) {
-      results.textContent = "Error " + resultsRequest.status + " : " + resultsRequest.responseText
     }
-  }
 </script>
