@@ -1,7 +1,5 @@
 exception Bad_request
 
-let mtree = ref Mtree.Empty
-
 (* Types and json parsing *)
 
 type json document = < content : Latex.t >
@@ -15,14 +13,15 @@ and documents =
 
 and query_args =
   < query :
-    < latex : string
-    ; limit : string
-    ; cutoff : string > >
+    < ?latex : string = "[]"
+    ; ?limit : string = "10"
+    ; ?exit : bool = false > >
 
 and update =
   < id : id
   ; key : int
-  ; value : < ?deleted : bool = false > >
+  ; value : < ?deleted : bool = false >
+  ; ?doc : Json_type.t >
 
 and updates =
   < rows : update list >
@@ -63,19 +62,21 @@ let get_all_documents () =
 
 (* Queries *)
 
-let run_query latex limit cutoff =
-  match Mtree.next limit cutoff (Mtree.search latex !mtree) with
+let run_query mtree latex limit =
+  match Mtree.next limit (Mtree.search latex mtree) with
     | Mtree.Last results -> List.map fst results
     | Mtree.More (results,_) -> List.map fst results
 
-let handle_query str =
+let handle_query mtree str =
   let response, code =
     try
       let query = (query_args_of_json (Json_io.json_of_string str))#query in
-      let latex = Latex.of_json (Json_io.json_of_string query#latex) in
-      let limit = int_of_string query#limit in
-      let cutoff = int_of_string query#cutoff in
-      json_of_ids (run_query latex limit cutoff), Json_type.Int 200 (* OK *)
+      if query#exit
+      then (print_string "Received exit"; raise Exit)
+      else
+        let latex = Latex.of_json (Json_io.json_of_string query#latex) in
+        let limit = int_of_string query#limit in
+        json_of_ids (run_query mtree latex limit), Json_type.Int 200 (* OK *)
     with
       | Json_type.Json_error _ | Latex.Bad_latex | Failure _ -> Json_type.Null, Json_type.Int 400 (* Bad request *)
       | _ -> Json_type.Null, Json_type.Int 500 (* Internal server error *) in
@@ -87,22 +88,22 @@ let handle_query str =
   print_string (output ^ "\n"); flush stdout
 
 let handle_queries () =
-  (try
-    mtree := (load_index ()).mtree
-  with _ ->
-    print_string "Could not open index!\n";
-    raise Exit);
+  let mtree =
+    try (load_index ()).mtree
+    with _ ->
+      print_string "Could not open index!\n";
+      raise Exit in
   while true do
     let input = input_line stdin in
-    handle_query input
+    handle_query mtree input
   done
 
 (* Updates *)
 
 let get_updates last_update =
-  let db_url = "http://localhost:5984/documents/_all_docs_by_seq?startkey=" ^ (string_of_int last_update) in
+  let url = db_url ^ "_all_docs_by_seq?include_docs=true&startkey=" ^ (string_of_int last_update) in
   try
-    let json = Json_io.json_of_string (Http_client.Convenience.http_get db_url) in
+    let json = Json_io.json_of_string (Http_client.Convenience.http_get url) in
     (updates_of_json json)#rows
   with _ ->
     print_string "Error contacting database\n";
@@ -114,10 +115,10 @@ let run_update index update =
     let mtree =
       if update#value#deleted
       then mtree
-      else Mtree.add (Mtree.node_of update#id (get_document update#id)) mtree in
+      else Mtree.add (Mtree.node_of update#id (document_of_json update#doc)#content) mtree in
     {mtree=mtree; last_update=update#key}
   with _ ->
-    print_string ("Update failed on document: " ^ update#id ^ "\n");
+    print_string ("Update failed for document: " ^ update#id ^ "\n");
     index
 
 let run_updates () =
@@ -128,9 +129,9 @@ let run_updates () =
 (* Building *)
 
 let get_last_update () =
-  let db_url = "http://localhost:5984/documents/_all_docs_by_seq?descending=true&limit=1" in
+  let url = db_url ^ "_all_docs_by_seq?descending=true&limit=1" in
   try
-    let json = Json_io.json_of_string (Http_client.Convenience.http_get db_url) in
+    let json = Json_io.json_of_string (Http_client.Convenience.http_get url) in
     (List.hd (updates_of_json json)#rows)#key
   with _ ->
     print_string "Error contacting database\n";
@@ -144,7 +145,7 @@ let build_index () =
       let latex = (document_of_json row#doc)#content in
       Mtree.add (Mtree.node_of row#id latex) mtree
     with _ ->
-      print_string ("Could not index document: " ^ row#id ^ "\n");
+      print_string ("Add failed for document: " ^ row#id ^ "\n");
       mtree in
   let mtree = List.fold_left add_doc Mtree.Empty docs in
   save_index { last_update = last_update ; mtree = mtree }
