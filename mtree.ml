@@ -18,10 +18,14 @@ type branch =
   ; right : mtree
   ; both : mtree }
 
+and root =
+  { node : node
+  ; deleted : bool }
+
 and mtree =
   | Empty
   | Element of node
-  | Branch of node * node * int * branch
+  | Branch of root * root * int * branch
 
 let empty = Empty
 
@@ -31,25 +35,27 @@ let empty_branch =
   ; right = empty
   ; neither = empty }
 
-let rec add e mtree =
-(*   print_string "\n"; flush stdout; *)
-  let rec addE mtree =
-(*     print_string "."; flush stdout; *)
-    match mtree with
-    | Empty -> Element e
-    | Element e' ->
-        Branch (e, e', (query_dist e e'), empty_branch)
-    | Branch (l,r,radius,branch) ->
-        let branch = match ((query_dist e l) < radius, (query_dist e r) < radius) with
-          | (false,false) -> {branch with neither = addE branch.neither}
-          | (true, false) -> {branch with left    = addE branch.left}
-          | (false,true ) -> {branch with right   = addE branch.right}
-          | (true, true ) -> {branch with both    = addE branch.both} in
-        Branch (l,r,radius,branch) in
-   addE mtree
+let root_of node =
+  { node = node
+  ; deleted = false }
 
-let delete id mtree = mtree
-(*  let rec del mtree =
+let rec add node mtree =
+  let rec loop mtree =
+    match mtree with
+    | Empty -> Element node
+    | Element e ->
+        Branch (root_of node, root_of e, (query_dist node e), empty_branch)
+    | Branch (l,r,radius,branch) ->
+        let branch = match ((query_dist node l.node) < radius, (query_dist node r.node) < radius) with
+          | (false,false) -> {branch with neither = loop branch.neither}
+          | (true, false) -> {branch with left    = loop branch.left}
+          | (false,true ) -> {branch with right   = loop branch.right}
+          | (true, true ) -> {branch with both    = loop branch.both} in
+        Branch (l,r,radius,branch) in
+   loop mtree
+
+let delete id mtree =
+  let rec loop mtree =
     match mtree with
     | Empty -> Empty
     | Element e ->
@@ -57,21 +63,23 @@ let delete id mtree = mtree
         then Empty
         else Element e
     | Branch (l,r,radius,branch) ->
-
-          let branch = match ((dist e l) < radius, (dist e r) < radius) with
-            | (false,false) -> {branch with neither = addE branch.neither}
-            | (true, false) -> {branch with left    = addE branch.left}
-            | (false,true ) -> {branch with right   = addE branch.right}
-            | (true, true ) -> {branch with both    = addE branch.both} in
-          Branch (l,r,radius,branch) in
-   addE mtree*)
+        let l = if l.node.id = id then {l with deleted = true} else l in
+        let r = if r.node.id = id then {r with deleted = true} else r in
+        let branch =
+          { neither = loop branch.neither
+          ; left = loop branch.left
+          ; right = loop branch.right
+          ; both = loop branch.both } in
+        Branch (l,r,radius,branch) in
+   loop mtree
 
 type search =
   { target : node
   ; unsearched : (mtree, int) Pqueue.t
   ; sorting : (id, int) Pqueue.t
   ; sorted : (id, int) Pqueue.t
-  ; min_dist : int}
+  ; min_dist : int
+  ; cutoff : int}
 
 let search latex mtree =
   let e = node_of "" latex in
@@ -82,10 +90,11 @@ let search latex mtree =
         | _ -> Pqueue.add mtree 0 Pqueue.empty)
   ; sorting = Pqueue.empty
   ; sorted = Pqueue.empty
-  ; min_dist = 0 }
+  ; min_dist = 0
+  ; cutoff = Array.length (e.suffixes)}
 
-let insert_result e dist cutoff search =
-  if dist < cutoff
+let insert_result e dist search =
+  if dist < search.cutoff
   then
     if dist < search.min_dist
     then {search with sorted = Pqueue.add e dist search.sorted}
@@ -97,8 +106,8 @@ let update_min_dist dist search =
   let (safe_results,rest) = Pqueue.split_at_priority min_dist search.sorting in
   {search with sorted = search.sorted @ safe_results; sorting = rest; min_dist = min_dist}
 
-let next_search_node cutoff search =
-  if search.min_dist > cutoff
+let next_search_node search =
+  if search.min_dist > search.cutoff
   then None
   else
     match Pqueue.pop search.unsearched with
@@ -110,14 +119,14 @@ type result =
   | More of (id * int) list * search
   | Last of (id * int) list
 
-let next k cutoff search =
+let next k search =
   let rec loop search =
     match Pqueue.split_at_length k (search.sorted) with
       (* We have enough results to return *)
       | Some (results,rest) -> More (results, {search with sorted = rest})
       (* We need to carry on searching *)
       | None ->
-          match next_search_node cutoff search with
+          match next_search_node search with
             (* Nothing left to search *)
             | None ->
                 (match search.sorting with
@@ -127,19 +136,19 @@ let next k cutoff search =
             | Some (mtree,search) ->
                 match mtree with
                   | Empty -> loop search
-                  | Element e -> loop (insert_result e.id (query_dist search.target e) cutoff search)
+                  | Element e -> loop (insert_result e.id (query_dist search.target e) search)
                   | Branch (l,r,radius,branch) ->
-                      let distL = query_dist search.target l in
-                      let distR = query_dist search.target r in
+                      let distL = query_dist search.target l.node in
+                      let distR = query_dist search.target r.node in
+                      let search = if l.deleted then search else insert_result l.node.id distL search in
+                      let search = if r.deleted then search else insert_result r.node.id distR search in
                       loop
-                      (insert_result l.id distL cutoff
-                      (insert_result r.id distR cutoff
                       {search with unsearched =
                         (Pqueue.add branch.neither 0
                         (Pqueue.add branch.left (distL - radius)
                         (Pqueue.add branch.right (distR - radius)
                         (Pqueue.add branch.both ((max distL distR) - radius)
-                        search.unsearched))))})) in
+                        search.unsearched))))} in
   loop search
 
 let print mtree =
