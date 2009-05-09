@@ -47,17 +47,17 @@ let add node bktree =
   add_node bktree
 
 let delete id bktree =
-  let rec del bktree =
+  let rec loop bktree =
     match bktree with
     | Empty -> Empty
     | Branch (root,del,bucket,branch) ->
         let del = if root.id = id then true else del in
         let bucket = List.filter (fun node -> node.id /= id) bucket in
         for i in 0 to branch_size do
-          branch.(i) <- del branch.(i)
+          branch.(i) <- loop branch.(i)
         done;
         Branch (root,del,bucket,branch) in
-  del bktree
+  loop bktree
 
 type search =
   { target : node
@@ -125,7 +125,7 @@ let next k search =
             | Some (bktree,search) ->
                 match bktree with
                   (* Empty trees never make it into the search queue *)
-                  | Branch (root,bucket,branch) ->
+                  | Branch (root,del,bucket,branch) ->
                       let d = dist search.target root in
                       let unsearched = ref search.unsearched in
                       (for i = 0 to branch_size - 1 do
@@ -136,7 +136,6 @@ let next k search =
                       (match branch.(branch_size) with
                           | Empty -> ()
                           | Branch _ as b -> unsearched := Pqueue.add b 0 !unsearched);
-                      loop (insert_result root.id d
-                            (insert_results bucket
-                              {search with unsearched = !unsearched})) in
+                      let search = if del then search else insert_result root.id d in
+                      loop (insert_results bucket {search with unsearched = !unsearched}) in
   loop search
