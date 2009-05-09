@@ -1,8 +1,11 @@
 open Util
 open Latex
 
-let left_edit_distance suffixL suffixR =
-(*   let suffixL, suffixR = suffixes forestL, suffixes forestR in *)
+let rec minimum (x : int) y z =
+  if y < x then minimum y x z else
+  if z < y then minimum x z y else x
+
+let left_edit_distance (suffixL : Latex.t) (suffixR : Latex.t) =
   let maxl, maxr = Array.length suffixL, Array.length suffixR in
   if maxl = 0 then maxr else
   if maxr = 0 then maxl else
@@ -17,17 +20,17 @@ let left_edit_distance suffixL suffixR =
       let tL, tR = suffixL.(l), suffixR.(r) in
       cache.(l).(r) <-
           minimum
-            [ 1 + cache.(l).(r+1)
-            ; 1 + cache.(l+1).(r)
-            ; (abs (compare tL tR)) + cache.(l+1).(r+1) ]
+            (1 + cache.(l).(r+1))
+            (1 + cache.(l+1).(r))
+            ((abs (compare tL tR)) + cache.(l+1).(r+1))
   done done;
   (* Non-matches on the right dont count until left starts matching *)
   for r = maxr - 1 downto 0 do
     let tL, tR = suffixL.(0), suffixR.(r) in
       cache.(0).(r) <-
           minimum
-            [ cache.(0).(r+1)
-            ; 1 + cache.(1).(r)
-            ; (abs (compare tL tR)) + cache.(1).(r+1) ]
+            (cache.(0).(r+1))
+            (1 + cache.(1).(r))
+            ((abs (compare tL tR)) + cache.(1).(r+1))
   done;
   cache.(0).(0)
