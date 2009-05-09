@@ -43,8 +43,8 @@
         response.rows.forEach(displayRow);
         body.appendChild(results);
 
-      } else if (resultsRequest.readyState == 4 && resultsRequest.status != 200) {
-        results.textContent = "Error " + resultsRequest.status + " : " + resultsRequest.responseText
+      } else if (searchRequest.readyState == 4 && searchRequest.status != 200) {
+        results.textContent = "Error " + searchRequest.status + " : " + searchRequest.responseText
       }
     }
 </script>
