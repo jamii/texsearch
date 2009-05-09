@@ -91,7 +91,7 @@ let search latex mtree =
   ; sorting = Pqueue.empty
   ; sorted = Pqueue.empty
   ; min_dist = 0
-  ; cutoff = Array.length (e.suffixes)}
+  ; cutoff = (Array.length (e.suffixes) / 3) + 1}
 
 let insert_result e dist search =
   if dist < search.cutoff

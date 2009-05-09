@@ -28,7 +28,7 @@ and updates =
 
 type index =
   { last_update : int
-  ; mtree : Mtree.mtree }
+  ; bktree : Bktree.bktree }
 
 (* Persisting *)
 
@@ -62,12 +62,12 @@ let get_all_documents () =
 
 (* Queries *)
 
-let run_query mtree latex limit =
-  match Mtree.next limit (Mtree.search latex mtree) with
-    | Mtree.Last results -> List.map fst results
-    | Mtree.More (results,_) -> List.map fst results
+let run_query bktree latex limit =
+  match Bktree.next limit (Bktree.search latex bktree) with
+    | Bktree.Last results -> List.map fst results
+    | Bktree.More (results,_) -> List.map fst results
 
-let handle_query mtree str =
+let handle_query bktree str =
   let response, code =
     try
       let query = (query_args_of_json (Json_io.json_of_string str))#query in
@@ -76,7 +76,7 @@ let handle_query mtree str =
       else
         let latex = Latex.of_json (Json_io.json_of_string query#latex) in
         let limit = int_of_string query#limit in
-        json_of_ids (run_query mtree latex limit), Json_type.Int 200 (* OK *)
+        json_of_ids (run_query bktree latex limit), Json_type.Int 200 (* OK *)
     with
       | Json_type.Json_error _ | Latex.Bad_latex | Failure _ -> Json_type.Null, Json_type.Int 400 (* Bad request *)
       | _ -> Json_type.Null, Json_type.Int 500 (* Internal server error *) in
@@ -88,14 +88,14 @@ let handle_query mtree str =
   print_string (output ^ "\n"); flush stdout
 
 let handle_queries () =
-  let mtree =
-    try (load_index ()).mtree
+  let bktree =
+    try (load_index ()).bktree
     with _ ->
       print_string "Could not open index!\n";
       raise Exit in
   while true do
     let input = input_line stdin in
-    handle_query mtree input
+    handle_query bktree input
   done
 
 (* Updates *)
@@ -111,12 +111,12 @@ let get_updates last_update =
 
 let run_update index update =
   try
-    let mtree = Mtree.delete update#id index.mtree in
-    let mtree =
+    let bktree = Bktree.delete update#id index.bktree in
+    let bktree =
       if update#value#deleted
-      then mtree
-      else Mtree.add (Mtree.node_of update#id (document_of_json update#doc)#content) mtree in
-    {mtree=mtree; last_update=update#key}
+      then bktree
+      else Bktree.add (Bktree.node_of update#id (document_of_json update#doc)#content) bktree in
+    {bktree=bktree; last_update=update#key}
   with _ ->
     print_string ("Update failed for document: " ^ update#id ^ "\n");
     index
@@ -140,15 +140,15 @@ let get_last_update () =
 let build_index () =
   let last_update = get_last_update () in
   let docs = get_all_documents () in
-  let add_doc mtree row =
+  let add_doc bktree row =
     try
       let latex = (document_of_json row#doc)#content in
-      Mtree.add (Mtree.node_of row#id latex) mtree
+      Bktree.add (Bktree.node_of row#id latex) bktree
     with _ ->
       print_string ("Add failed for document: " ^ row#id ^ "\n");
-      mtree in
-  let mtree = List.fold_left add_doc Mtree.Empty docs in
-  save_index { last_update = last_update ; mtree = mtree }
+      bktree in
+  let bktree = List.fold_left add_doc Bktree.Empty docs in
+  save_index { last_update = last_update ; bktree = bktree }
 
 (* Main *)
 
@@ -156,6 +156,6 @@ open Arg
 let _ = parse
   [("-rebuild", Unit build_index, ": Rebuild the index from scratch")
   ;("-update", Unit run_updates, ": Update the existing index")
-  ;("-query", Unit handle_queries, ": Handle mtree queries as a couchdb _external")]
+  ;("-query", Unit handle_queries, ": Handle bktree queries as a couchdb _external")]
   ignore
-  "Use 'mtree -help' for available options"
+  "Use 'bktree -help' for available options"
