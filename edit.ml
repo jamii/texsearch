@@ -14,31 +14,11 @@ let suffixes forest =
       | (t::ts) -> t :: (loop ((children t) @ ts)) in
   Array.of_list (loop forest)
 
-(*let edit_distance forestL forestR =
-  let suffixL, suffixR = suffixes forestL, suffixes forestR in
-  let maxl, maxr = Array.length suffixL, Array.length suffixR in
-  let cache = Array.make_matrix (maxl + 1) (maxr + 1) 0 in
-  for l = maxl - 1 downto 0 do
-    let tL = suffixL.(l) in
-    cache.(l).(maxr) <- (metric (Some tL) None) + cache.(l+1).(maxr)
-  done;
-  for r = maxr - 1 downto 0 do
-    let tR = suffixR.(r) in
-    cache.(maxl).(r) <- (metric None (Some tR)) + cache.(maxl).(r+1)
-  done;
-  for l = maxl - 1 downto 0 do
-    for r = maxr - 1 downto 0 do
-      let tL, tR = suffixL.(l), suffixR.(r) in
-      cache.(l).(r) <-
-          minimum
-            [ (metric None (Some tR)) + cache.(l).(r+1)
-            ; (metric (Some tL) None) + cache.(l+1).(r)
-            ; (metric (Some tL) (Some tR)) + cache.(l+1).(r+1) ]
-  done done; cache.(0).(0)*)
-
 let left_edit_distance suffixL suffixR =
 (*   let suffixL, suffixR = suffixes forestL, suffixes forestR in *)
   let maxl, maxr = Array.length suffixL, Array.length suffixR in
+  if maxl = 0 then maxr else
+  if maxr = 0 then maxl else
   let cache = Array.make_matrix (maxl + 1) (maxr + 1) 0 in
   (* Must match everything on the left *)
   for l = maxl - 1 downto 0 do
