@@ -17,7 +17,7 @@ def postDocs(docs):
 def by_doi(dois):
   conn = httplib.HTTPConnection("localhost:5984")
   headers = {"Content-type": "application/json"}
-  conn.request("POST", "/documents/_design/demo/_view/by_doi", json.dumps({'keys':dois}), headers)
+  conn.request("POST", "/documents/_design/search/_view/by_doi", json.dumps({'keys':dois}), headers)
   response = conn.getresponse()
   if response.status != 200:
     # What status codes are acceptable here?

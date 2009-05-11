@@ -21,7 +21,7 @@ def search(latex,limit):
 
 def lookup(ids):
   conn = httplib.HTTPConnection("localhost:5984")
-  conn.request("POST", "/documents/_design/demo/_view/results", "{\"keys\": %s}" % ids, headers)
+  conn.request("POST", "/documents/_design/search/_view/results", "{\"keys\": %s}" % ids, headers)
   response = conn.getresponse()
   if response.status != 200:
     # What status codes are acceptable here?
