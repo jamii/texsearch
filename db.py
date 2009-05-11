@@ -16,9 +16,9 @@ def initDB():
 
   print "Deleting existing databases"
   conn.request("DELETE", "/documents")
-  expectResponse(conn,200)
+  conn.getresponse().read()
   conn.request("DELETE", "/store")
-  expectResponse(conn,200)
+  conn.getresponse().read()
 
   print "Creating new databases"
   conn.request("PUT", "/documents")
