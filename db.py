@@ -3,6 +3,44 @@ import sys, httplib
 from xml.dom import minidom
 from preprocessor import preprocess
 import simplejson as json
+from util import expectResponse
+
+def initDB():
+  try :
+    # Print warning
+
+    conn = httplib.HTTPConnection("localhost:5984")
+    headers = {"Content-type": "application/json"}
+
+    # Delete existing databases
+    conn.request("DELETE", "/documents")
+    expectResponse(conn,200)
+    conn.request("DELETE", "/store")
+    expectResponse(conn,200)
+
+    # Create new databases
+    conn.request("PUT", "/documents")
+    expectResponse(conn,201)
+    conn.request("PUT", "/store")
+    expectResponse(conn,201)
+
+    # Setup views
+    try:
+      design = open('design.json','r')
+      conn.request("PUT", "/documents/_design/search", design.read())
+      expectResponse(conn,201)
+    except IOError:
+      print "Could not find the design document (design.json)"
+      sys.exit(1)
+    finally:
+      design.close()
+
+  except Exception, e:
+    print "Error contacting database:"
+    raise e
+    sys.exit(1)
+  finally:
+    conn.close()
 
 def postDocs(docs):
   conn = httplib.HTTPConnection("localhost:5984")
