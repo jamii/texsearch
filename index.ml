@@ -32,15 +32,21 @@ type index =
 
 (* Persisting *)
 
+let index_url = "http://localhost:5984/store/index/attachment"
+
 let load_index () =
-  let index_file = open_in_bin "/home/jamie/texsearch/index_store" in
-  let index = (Marshal.from_channel index_file : index) in
-  close_in index_file; index
+  try
+    (Marshal.from_string (Http_client.Convenience.http_get index_url) 0 : index)
+  with _ ->
+    print_string "Error contacting database (store/index)\n";
+    raise Exit
 
 let save_index index =
-  let index_file = open_out_bin "/home/jamie/texsearch/index_store" in
-  Marshal.to_channel index_file index [Marshal.No_sharing];
-  close_out index_file
+  try
+    ignore (Http_client.Convenience.http_put index_url (Marshal.to_string (index : index) [Marshal.No_sharing]))
+  with _ ->
+    print_string "Error contacting database (store/index)\n";
+    raise Exit
 
 (* Database interaction *)
 
@@ -57,7 +63,7 @@ let get_all_documents () =
     let json = Json_io.json_of_string (Http_client.Convenience.http_get url) in
     (documents_of_json json)#rows
   with _ ->
-    print_string "Error contacting database\n";
+    print_string "Error contacting database (documents)\n";
     raise Exit
 
 (* Queries *)
@@ -106,7 +112,7 @@ let get_updates last_update =
     let json = Json_io.json_of_string (Http_client.Convenience.http_get url) in
     (updates_of_json json)#rows
   with _ ->
-    print_string "Error contacting database\n";
+    print_string "Error contacting database (documents)\n";
     raise Exit
 
 let run_update index update =
@@ -134,7 +140,7 @@ let get_last_update () =
     let json = Json_io.json_of_string (Http_client.Convenience.http_get url) in
     (List.hd (updates_of_json json)#rows)#key
   with _ ->
-    print_string "Error contacting database\n";
+    print_string "Error contacting database (documents)\n";
     raise Exit
 
 let build_index () =
