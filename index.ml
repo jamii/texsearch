@@ -49,19 +49,17 @@ let load_index_revision () =
     raise Exit
 
 let load_index () =
-  flush_line "Loading index";
   try
-    let attachment_url = store_url ^ "index/attachment" in
+    let attachment_url = store_url ^ "index/index" in
     (Marshal.from_string (Http.http_get attachment_url) 0 : index)
   with _ ->
     flush_line "Error contacting database (store/index)";
     raise Exit
 
 let save_index index =
-  flush_line "Saving index";
   try
     let revision = load_index_revision () in
-    let attachment_url = store_url ^ "index/attachment?rev=" ^ revision in
+    let attachment_url = store_url ^ "index/index?rev=" ^ revision in
     ignore (Http.http_put attachment_url (Marshal.to_string (index : index) [Marshal.No_sharing]))
   with _ ->
     flush_line "Error contacting database (store/index)";
@@ -77,7 +75,6 @@ let get_document id =
   (document_of_json json)#content
 
 let get_all_documents () =
-  flush_line "Fetching documents";
   let url = db_url ^ "_all_docs?include_docs=true" in
   try
     let json = Json_io.json_of_string (Http.http_get url) in
@@ -134,7 +131,6 @@ let restart_index () =
 (* Updates *)
 
 let get_updates last_update =
-  flush_line "Fetching updates";
   let url = db_url ^ "_all_docs_by_seq?include_docs=true&startkey=" ^ (string_of_int last_update) in
   try
     let json = Json_io.json_of_string (Http.http_get url) in
@@ -156,10 +152,13 @@ let run_update index update =
     index
 
 let run_updates () =
+  flush_line "Loading index";
   let index = load_index () in
+  flush_line "Fetching updates";
   let updates = get_updates index.last_update in
   flush_line "Updating...";
   let index = List.fold_left run_update index updates in
+  flush_line "Saving index";
   save_index index;
   restart_index ()
 
@@ -175,6 +174,7 @@ let get_last_update () =
     raise Exit
 
 let build_index () =
+  flush_line "Fetching documents";
   let last_update = get_last_update () in
   let docs = get_all_documents () in
   flush_line "Building...";
@@ -186,6 +186,7 @@ let build_index () =
       flush_line ("Add failed for fragment: " ^ row#id ^ "");
       bktree in
   let bktree = List.fold_left add_doc Bktree.Empty docs in
+  flush_line "Saving index";
   save_index { last_update = last_update ; bktree = bktree };
   restart_index ()
 
