@@ -1,0 +1,2 @@
+#!/bin/bash
+ocamlfind ocamlopt -linkpkg -package netclient -package json-wheel -package json-static -syntax camlp4o -package json-static dlist.ml util.ml latex.ml edit.ml pqueue.ml bktree.ml index.ml -o index
