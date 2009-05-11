@@ -47,6 +47,7 @@ let load_index_revision () =
     raise Exit
 
 let load_index () =
+  print_string "Loading index\n";
   try
     let attachment_url = store_url ^ "index/attachment" in
     (Marshal.from_string (Http.http_get attachment_url) 0 : index)
@@ -55,6 +56,7 @@ let load_index () =
     raise Exit
 
 let save_index index =
+  print_string "Saving index\n";
   try
     let revision = load_index_revision () in
     let attachment_url = store_url ^ "index/attachment?rev=" ^ revision in
@@ -73,6 +75,7 @@ let get_document id =
   (document_of_json json)#content
 
 let get_all_documents () =
+  print_string "Fetching documents\n";
   let url = db_url ^ "_all_docs?include_docs=true" in
   try
     let json = Json_io.json_of_string (Http.http_get url) in
@@ -129,6 +132,7 @@ let restart_index () =
 (* Updates *)
 
 let get_updates last_update =
+  print_string "Fetching updates\n";
   let url = db_url ^ "_all_docs_by_seq?include_docs=true&startkey=" ^ (string_of_int last_update) in
   try
     let json = Json_io.json_of_string (Http.http_get url) in
