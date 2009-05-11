@@ -31,7 +31,7 @@ def initDB():
   revision = ""
 
   try:
-    design = open('design.json','r')
+    design = open('/opt/texsearch/design.json','r')
     conn.request("PUT", "/documents/_design/search", design.read())
     revision = json.loads(expectResponse(conn,201))['rev']
   except IOError:
@@ -42,7 +42,7 @@ def initDB():
 
   print "Adding demo page"
   try:
-    demo = open('demo.html','r')
+    demo = open('/opt/texsearch/demo.html','r')
     headers = {"Content-Type": "text/html"}
     conn.request("PUT", ("/documents/_design/search/demo.html?rev=%s" % revision), demo.read(), headers)
     expectResponse(conn,201)
