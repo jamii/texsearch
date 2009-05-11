@@ -6,22 +6,27 @@ import simplejson as json
 from util import expectResponse
 
 def initDB():
-  # Print warning
+  # Warn user
+  response = raw_input("This will erase the texsearch database. Are you sure? (y/n):")
+  if response != 'y':
+    print "Ok, nothing was done"
+    sys.exit(0)
 
   conn = httplib.HTTPConnection("localhost:5984")
 
-  # Delete existing databases
+  print "Deleting existing databases"
   conn.request("DELETE", "/documents")
   expectResponse(conn,200)
   conn.request("DELETE", "/store")
   expectResponse(conn,200)
 
-  # Create new databases
+  print "Creating new databases"
   conn.request("PUT", "/documents")
   expectResponse(conn,201)
   conn.request("PUT", "/store")
   expectResponse(conn,201)
 
+  print "Creating views"
   # Setup views
   revision = ""
 
@@ -35,7 +40,7 @@ def initDB():
   finally:
     design.close()
 
-  # Add demo page
+  print "Adding demo page"
   try:
     demo = open('demo.html','r')
     headers = {"Content-Type": "text/html"}
@@ -47,7 +52,6 @@ def initDB():
   finally:
     demo.close()
 
-  # Add an empty index
   conn.request("PUT", "/store/index", json.dumps({}))
   expectResponse(conn,201)
 
