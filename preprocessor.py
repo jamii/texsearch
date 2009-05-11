@@ -25,8 +25,6 @@ ignoreSet = frozenset([
 ,'document'
 ,'left'
 ,'right'
-,'langle'
-,'rangle'
 ,'rm'
 ,'par'])
 
