@@ -15,7 +15,7 @@ and query_args =
   < query :
     < ?latex : string = "[]"
     ; ?limit : string = "10"
-    ; ?exit : bool = false > >
+    ; ?exit : string = "false" > >
 
 and update =
   < id : id
@@ -92,7 +92,7 @@ let handle_query bktree str =
   let response, code =
     try
       let query = (query_args_of_json (Json_io.json_of_string str))#query in
-      if query#exit
+      if query#exit = "true"
       then (print_string "Received exit"; raise Exit)
       else
         let latex = Latex.of_json (Json_io.json_of_string query#latex) in
@@ -109,15 +109,22 @@ let handle_query bktree str =
   print_string (output ^ "\n"); flush stdout
 
 let handle_queries () =
-  let bktree =
-    try (load_index ()).bktree
-    with _ ->
-      print_string "Could not open index!\n";
-      raise Exit in
+  let bktree = (load_index ()).bktree in
   while true do
     let input = input_line stdin in
     handle_query bktree input
   done
+
+(* Restarting the index *)
+
+let restart_index () =
+  try
+    ignore (Http.http_get (db_url ^ "_external/index?exit=true"));
+    print_string "Failed to restart the index process\n"
+  with Http_client.Http_error (code,msg) ->
+    if code = 500
+    then print_string "Restarted the index process\n"
+    else print_string "Failed to restart the index process\n"
 
 (* Updates *)
 
@@ -145,7 +152,8 @@ let run_update index update =
 let run_updates () =
   let index = load_index () in
   let index = List.fold_left run_update index (get_updates index.last_update) in
-  save_index index
+  save_index index;
+  restart_index ()
 
 (* Building *)
 
@@ -169,7 +177,8 @@ let build_index () =
       print_string ("Add failed for document: " ^ row#id ^ "\n");
       bktree in
   let bktree = List.fold_left add_doc Bktree.Empty docs in
-  save_index { last_update = last_update ; bktree = bktree }
+  save_index { last_update = last_update ; bktree = bktree };
+  restart_index ()
 
 (* Main *)
 
@@ -177,6 +186,6 @@ open Arg
 let _ = parse
   [("-rebuild", Unit build_index, ": Rebuild the index from scratch")
   ;("-update", Unit run_updates, ": Update the existing index")
-  ;("-query", Unit handle_queries, ": Handle bktree queries as a couchdb _external")]
+  ;("-query", Unit handle_queries, ": Handle index queries as a couchdb _external")]
   ignore
-  "Use 'bktree -help' for available options"
+  "Use 'index -help' for available options"
