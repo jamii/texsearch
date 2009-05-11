@@ -1,5 +1,7 @@
 module Http = Http_client.Convenience
 
+let flush_line str = print_string str; print_string "\n"; flush stdout
+
 (* Types and json parsing *)
 
 type json document = < content : Latex.t >
@@ -43,26 +45,26 @@ let load_index_revision () =
     let json = Json_io.json_of_string (Http.http_get index_url) in
     (revision_of_json json)#rev
   with _ ->
-    print_string "Error contacting database (store/index)\n";
+    flush_line "Error contacting database (store/index)";
     raise Exit
 
 let load_index () =
-  print_string "Loading index\n";
+  flush_line "Loading index";
   try
     let attachment_url = store_url ^ "index/attachment" in
     (Marshal.from_string (Http.http_get attachment_url) 0 : index)
   with _ ->
-    print_string "Error contacting database (store/index)\n";
+    flush_line "Error contacting database (store/index)";
     raise Exit
 
 let save_index index =
-  print_string "Saving index\n";
+  flush_line "Saving index";
   try
     let revision = load_index_revision () in
     let attachment_url = store_url ^ "index/attachment?rev=" ^ revision in
     ignore (Http.http_put attachment_url (Marshal.to_string (index : index) [Marshal.No_sharing]))
   with _ ->
-    print_string "Error contacting database (store/index)\n";
+    flush_line "Error contacting database (store/index)";
     raise Exit
 
 (* Database interaction *)
@@ -75,13 +77,13 @@ let get_document id =
   (document_of_json json)#content
 
 let get_all_documents () =
-  print_string "Fetching documents\n";
+  flush_line "Fetching documents";
   let url = db_url ^ "_all_docs?include_docs=true" in
   try
     let json = Json_io.json_of_string (Http.http_get url) in
     (documents_of_json json)#rows
   with _ ->
-    print_string "Error contacting database (documents)\n";
+    flush_line "Error contacting database (documents)";
     raise Exit
 
 (* Queries *)
@@ -96,7 +98,7 @@ let handle_query bktree str =
     try
       let query = (query_args_of_json (Json_io.json_of_string str))#query in
       if query#exit = "true"
-      then (print_string "Received exit"; raise Exit)
+      then (flush_line "Received exit"; raise Exit)
       else
         let latex = Latex.of_json (Json_io.json_of_string query#latex) in
         let limit = int_of_string query#limit in
@@ -109,7 +111,7 @@ let handle_query bktree str =
       (Json_type.Object
         [ ("code",code)
         ; ("json",response) ]) in
-  print_string (output ^ "\n"); flush stdout
+  flush_line output
 
 let handle_queries () =
   let bktree = (load_index ()).bktree in
@@ -123,22 +125,22 @@ let handle_queries () =
 let restart_index () =
   try
     ignore (Http.http_get (db_url ^ "_external/index?exit=true"));
-    print_string "Failed to restart the index process\n"
+    flush_line "Failed to restart the index process"
   with Http_client.Http_error (code,msg) ->
     if code = 500
-    then print_string "Restarted the index process\n"
-    else print_string "Failed to restart the index process\n"
+    then flush_line "Restarted the index process"
+    else flush_line "Failed to restart the index process"
 
 (* Updates *)
 
 let get_updates last_update =
-  print_string "Fetching updates\n";
+  flush_line "Fetching updates";
   let url = db_url ^ "_all_docs_by_seq?include_docs=true&startkey=" ^ (string_of_int last_update) in
   try
     let json = Json_io.json_of_string (Http.http_get url) in
     (updates_of_json json)#rows
   with _ ->
-    print_string "Error contacting database (documents)\n";
+    flush_line "Error contacting database (documents)";
     raise Exit
 
 let run_update index update =
@@ -150,12 +152,14 @@ let run_update index update =
       else Bktree.add (Bktree.node_of update#id (document_of_json update#doc)#content) bktree in
     {bktree=bktree; last_update=update#key}
   with _ ->
-    print_string ("Update failed for document: " ^ update#id ^ "\n");
+    flush_line ("Update failed for dfragment: " ^ update#id ^ "");
     index
 
 let run_updates () =
   let index = load_index () in
-  let index = List.fold_left run_update index (get_updates index.last_update) in
+  let updates = get_updates index.last_update in
+  flush_line "Updating...";
+  let index = List.fold_left run_update index updates in
   save_index index;
   restart_index ()
 
@@ -167,18 +171,19 @@ let get_last_update () =
     let json = Json_io.json_of_string (Http.http_get url) in
     (List.hd (updates_of_json json)#rows)#key
   with _ ->
-    print_string "Error contacting database (documents)\n";
+    flush_line "Error contacting database (documents)";
     raise Exit
 
 let build_index () =
   let last_update = get_last_update () in
   let docs = get_all_documents () in
+  flush_line "Building...";
   let add_doc bktree row =
     try
       let latex = (document_of_json row#doc)#content in
       Bktree.add (Bktree.node_of row#id latex) bktree
     with _ ->
-      print_string ("Add failed for document: " ^ row#id ^ "\n");
+      flush_line ("Add failed for fragment: " ^ row#id ^ "");
       bktree in
   let bktree = List.fold_left add_doc Bktree.Empty docs in
   save_index { last_update = last_update ; bktree = bktree };
