@@ -1,4 +1,4 @@
-exception Bad_request
+module Http = Http_client.Convenience
 
 (* Types and json parsing *)
 
@@ -26,24 +26,39 @@ and update =
 and updates =
   < rows : update list >
 
+and revision =
+  < rev "_rev" : string >
+
 type index =
   { last_update : int
   ; bktree : Bktree.bktree }
 
 (* Persisting *)
 
-let index_url = "http://localhost:5984/store/index/attachment"
+let store_url = "http://localhost:5984/store/"
+
+let load_index_revision () =
+  try
+    let index_url = store_url ^ "index" in
+    let json = Json_io.json_of_string (Http.http_get index_url) in
+    (revision_of_json json)#rev
+  with _ ->
+    print_string "Error contacting database (store/index)\n";
+    raise Exit
 
 let load_index () =
   try
-    (Marshal.from_string (Http_client.Convenience.http_get index_url) 0 : index)
+    let attachment_url = store_url ^ "index/attachment" in
+    (Marshal.from_string (Http.http_get attachment_url) 0 : index)
   with _ ->
     print_string "Error contacting database (store/index)\n";
     raise Exit
 
 let save_index index =
   try
-    ignore (Http_client.Convenience.http_put index_url (Marshal.to_string (index : index) [Marshal.No_sharing]))
+    let revision = load_index_revision () in
+    let attachment_url = store_url ^ "index/attachment?rev=" ^ revision in
+    ignore (Http.http_put attachment_url (Marshal.to_string (index : index) [Marshal.No_sharing]))
   with _ ->
     print_string "Error contacting database (store/index)\n";
     raise Exit
@@ -54,13 +69,13 @@ let db_url = "http://localhost:5984/documents/"
 
 let get_document id =
   let url = db_url ^ id in
-  let json = Json_io.json_of_string (Http_client.Convenience.http_get url) in
+  let json = Json_io.json_of_string (Http.http_get url) in
   (document_of_json json)#content
 
 let get_all_documents () =
   let url = db_url ^ "_all_docs?include_docs=true" in
   try
-    let json = Json_io.json_of_string (Http_client.Convenience.http_get url) in
+    let json = Json_io.json_of_string (Http.http_get url) in
     (documents_of_json json)#rows
   with _ ->
     print_string "Error contacting database (documents)\n";
@@ -109,7 +124,7 @@ let handle_queries () =
 let get_updates last_update =
   let url = db_url ^ "_all_docs_by_seq?include_docs=true&startkey=" ^ (string_of_int last_update) in
   try
-    let json = Json_io.json_of_string (Http_client.Convenience.http_get url) in
+    let json = Json_io.json_of_string (Http.http_get url) in
     (updates_of_json json)#rows
   with _ ->
     print_string "Error contacting database (documents)\n";
@@ -137,7 +152,7 @@ let run_updates () =
 let get_last_update () =
   let url = db_url ^ "_all_docs_by_seq?descending=true&limit=1" in
   try
-    let json = Json_io.json_of_string (Http_client.Convenience.http_get url) in
+    let json = Json_io.json_of_string (Http.http_get url) in
     (List.hd (updates_of_json json)#rows)#key
   with _ ->
     print_string "Error contacting database (documents)\n";
