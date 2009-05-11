@@ -1,14 +1,13 @@
 class UnexpectedResponse(Exception):
-  __init__(self,expected,got):
+  def __init__(self,expected,got):
     self.expected = expected
     self.got = got
 
-  __str__(self):
-    return "UnexpectedResponse: Expected code %s, got code %s"
+  def __str__(self):
+    return ("Expected code %s, got code %s" % (self.expected,self.got))
 
 def expectResponse(conn,code):
   response = conn.getresponse()
   if response.status != code:
-    print "Unexpected response from database"
-    raise UnexpectedResponse()
+    raise UnexpectedResponse(code,response.status)
   return response.read()

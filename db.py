@@ -6,69 +6,70 @@ import simplejson as json
 from util import expectResponse
 
 def initDB():
-  try :
-    # Print warning
+  # Print warning
 
-    conn = httplib.HTTPConnection("localhost:5984")
-    headers = {"Content-type": "application/json"}
+  conn = httplib.HTTPConnection("localhost:5984")
 
-    # Delete existing databases
-    conn.request("DELETE", "/documents")
-    expectResponse(conn,200)
-    conn.request("DELETE", "/store")
-    expectResponse(conn,200)
+  # Delete existing databases
+  conn.request("DELETE", "/documents")
+  expectResponse(conn,200)
+  conn.request("DELETE", "/store")
+  expectResponse(conn,200)
 
-    # Create new databases
-    conn.request("PUT", "/documents")
-    expectResponse(conn,201)
-    conn.request("PUT", "/store")
-    expectResponse(conn,201)
+  # Create new databases
+  conn.request("PUT", "/documents")
+  expectResponse(conn,201)
+  conn.request("PUT", "/store")
+  expectResponse(conn,201)
 
-    # Setup views
-    try:
-      design = open('design.json','r')
-      conn.request("PUT", "/documents/_design/search", design.read())
-      expectResponse(conn,201)
-    except IOError:
-      print "Could not find the design document (design.json)"
-      sys.exit(1)
-    finally:
-      design.close()
+  # Setup views
+  revision = ""
 
-  except Exception, e:
-    print "Error contacting database:"
-    raise e
+  try:
+    design = open('design.json','r')
+    conn.request("PUT", "/documents/_design/search", design.read())
+    revision = json.loads(expectResponse(conn,201))['rev']
+  except IOError:
+    print "Could not find the design document (design.json)"
     sys.exit(1)
   finally:
-    conn.close()
+    design.close()
+
+  # Add demo page
+  try:
+    demo = open('demo.html','r')
+    headers = {"Content-Type": "text/html"}
+    conn.request("PUT", ("/documents/_design/search/demo.html?rev=%s" % revision), demo.read(), headers)
+    expectResponse(conn,201)
+  except IOError:
+    print "Could not find the demo page (demo.html)"
+    sys.exit(1)
+  finally:
+    demo.close()
+
+  # Add an empty index
+  conn.request("PUT", "/store/index", json.dumps({}))
+  expectResponse(conn,201)
+
+  conn.close()
 
 def postDocs(docs):
-  try:
-    conn = httplib.HTTPConnection("localhost:5984")
-    headers = {"Content-type": "application/json"}
-    conn.request("POST", "/documents/_bulk_docs", json.dumps({'all-or-nothing':True, 'docs':docs}), headers)
-    expectResponse(conn,201)
-  except Exception, e:
-    print "Error contacting database:"
-    raise e
-  finally:
-    conn.close()
+  conn = httplib.HTTPConnection("localhost:5984")
+  headers = {"Content-type": "application/json"}
+  conn.request("POST", "/documents/_bulk_docs", json.dumps({'all-or-nothing':True, 'docs':docs}), headers)
+  expectResponse(conn,201)
+  conn.close()
 
 def by_doi(dois):
-  try:
-    conn = httplib.HTTPConnection("localhost:5984")
-    headers = {"Content-type": "application/json"}
-    conn.request("POST", "/documents/_design/search/_view/by_doi", json.dumps({'keys':dois}), headers)
-    result = json.loads(expectResponse(conn,200))
-    ids = []
-    for row in result['rows']:
-      ids.append(row['value'])
-    return ids
-  except Exception, e:
-    print "Error contacting database:"
-    raise e
-  finally:
-    conn.close()
+  conn = httplib.HTTPConnection("localhost:5984")
+  headers = {"Content-type": "application/json"}
+  conn.request("POST", "/documents/_design/search/_view/by_doi", json.dumps({'keys':dois}), headers)
+  result = json.loads(expectResponse(conn,200))
+  ids = []
+  for row in result['rows']:
+    ids.append(row['value'])
+  return ids
+  conn.close()
 
 # Bulk process a xml document
 def addXml(fileName):
