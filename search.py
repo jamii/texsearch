@@ -4,6 +4,7 @@ import simplejson as json
 import sys, httplib, urllib
 from preprocessor import preprocess
 import re
+from util import expectResponse
 
 headers = {"Content-type": "application/json"}
 
@@ -11,22 +12,14 @@ def search(latex,limit):
   conn = httplib.HTTPConnection("localhost:5984")
   url = "/documents/_external/index?%s" % urllib.urlencode({'latex':latex, 'limit':limit})
   conn.request("GET", url)
-  response = conn.getresponse()
-  if response.status != 200:
-    # What status codes are acceptable here?
-    raise IOError
-  result = response.read()
+  result = expectResponse(conn,200)
   conn.close()
   return result
 
 def lookup(ids):
   conn = httplib.HTTPConnection("localhost:5984")
   conn.request("POST", "/documents/_design/search/_view/results", "{\"keys\": %s}" % ids, headers)
-  response = conn.getresponse()
-  if response.status != 200:
-    # What status codes are acceptable here?
-    raise IOError
-  result = response.read()
+  result = expectResponse(conn,200)
   conn.close()
   return result
 

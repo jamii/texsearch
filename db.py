@@ -43,29 +43,32 @@ def initDB():
     conn.close()
 
 def postDocs(docs):
-  conn = httplib.HTTPConnection("localhost:5984")
-  headers = {"Content-type": "application/json"}
-  conn.request("POST", "/documents/_bulk_docs", json.dumps({'all-or-nothing':True, 'docs':docs}), headers)
-  response = conn.getresponse()
-  if response.status != 201:
-    # What status codes are acceptable here?
-    raise IOError
-  conn.close()
+  try:
+    conn = httplib.HTTPConnection("localhost:5984")
+    headers = {"Content-type": "application/json"}
+    conn.request("POST", "/documents/_bulk_docs", json.dumps({'all-or-nothing':True, 'docs':docs}), headers)
+    expectResponse(conn,201)
+  except Exception, e:
+    print "Error contacting database:"
+    raise e
+  finally:
+    conn.close()
 
 def by_doi(dois):
-  conn = httplib.HTTPConnection("localhost:5984")
-  headers = {"Content-type": "application/json"}
-  conn.request("POST", "/documents/_design/search/_view/by_doi", json.dumps({'keys':dois}), headers)
-  response = conn.getresponse()
-  if response.status != 200:
-    # What status codes are acceptable here?
-    raise IOError
-  result = json.loads(response.read())
-  ids = []
-  for row in result['rows']:
-    ids.append(row['value'])
-  conn.close()
-  return ids
+  try:
+    conn = httplib.HTTPConnection("localhost:5984")
+    headers = {"Content-type": "application/json"}
+    conn.request("POST", "/documents/_design/search/_view/by_doi", json.dumps({'keys':dois}), headers)
+    result = json.loads(expectResponse(conn,200))
+    ids = []
+    for row in result['rows']:
+      ids.append(row['value'])
+    return ids
+  except Exception, e:
+    print "Error contacting database:"
+    raise e
+  finally:
+    conn.close()
 
 # Bulk process a xml document
 def addXml(fileName):
@@ -108,14 +111,16 @@ def delXml(fileName):
   postDocs(docs)
 
 def usage():
-  print "Usage: 'db --add=docs1.xml --add=docs2.xml --del=docs3.xml'"
+  print "Usage: --init, --add docs.xml, --del docs.xml"
 
 import getopt
 
 if __name__ == '__main__':
   try:
-    opts, args = getopt.getopt(sys.argv[1:], "", ["add=", "del="])
+    opts, args = getopt.getopt(sys.argv[1:], "", ["add=", "del=", "init"])
     for opt, arg in opts:
+      if opt == "--init":
+        initDB()
       if opt == "--add":
         addXml(arg)
       if opt == "--del":
