@@ -34,11 +34,10 @@ def initDB():
     design = open('/opt/texsearch/design.json','r')
     conn.request("PUT", "/documents/_design/search", design.read())
     revision = json.loads(expectResponse(conn,201))['rev']
+    design.close()
   except IOError:
     print "Could not find the design document (design.json)"
     sys.exit(1)
-  finally:
-    design.close()
 
   print "Adding demo page"
   try:
@@ -46,11 +45,10 @@ def initDB():
     headers = {"Content-Type": "text/html"}
     conn.request("PUT", ("/documents/_design/search/demo.html?rev=%s" % revision), demo.read(), headers)
     expectResponse(conn,201)
+    demo.close()
   except IOError:
     print "Could not find the demo page (demo.html)"
     sys.exit(1)
-  finally:
-    demo.close()
 
   conn.request("PUT", "/store/index", json.dumps({}))
   expectResponse(conn,201)

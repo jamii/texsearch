@@ -45,9 +45,9 @@ def main():
     except KeyError, e:
       results = {'error': str(e)}
       code = 400 # Bad request
-    #except Exception, e:
-      #results = {'error': str(e)}
-      #code = 500 # Internal server error
+    except Exception, e:
+      results = {'error': str(e)}
+      code = 500 # Internal server error
     sys.stdout.write("{\"code\":%s, \"json\":%s}\n" % (code,results))
     sys.stdout.flush()
 
