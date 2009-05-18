@@ -32,15 +32,15 @@
         results = document.createElement('div');
         function displayRow(row) {
           var a = document.createElement('a');
-          a.textContent = row.value[0];
-          a.href = "http://www.springerlink.com/content?k=doi%3a(" + row.value[0] + ")";
+          a.textContent = row[0];
+          a.href = "http://www.springerlink.com/content?k=doi%3a(" + row[0] + ")";
           results.appendChild(a);
 
           var p = document.createElement('p');
-          p.textContent = row.value[1];
+          p.textContent = row[1];
           results.appendChild(p)
         }
-        response.rows.forEach(displayRow);
+        response.forEach(displayRow);
         body.appendChild(results);
 
       } else if (searchRequest.readyState == 4 && searchRequest.status != 200) {

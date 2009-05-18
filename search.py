@@ -19,9 +19,11 @@ def search(latex,limit):
 def lookup(ids):
   conn = httplib.HTTPConnection("localhost:5984")
   conn.request("POST", "/documents/_design/search/_view/results", "{\"keys\": %s}" % ids, headers)
-  result = expectResponse(conn,200)
+  result = json.loads(expectResponse(conn,200))
   conn.close()
-  return result
+
+  values = [row['value'] for row in result['rows']]
+  return values
 
 def requests():
   line = sys.stdin.readline()
@@ -40,7 +42,7 @@ def main():
     try:
       query = request['query']
       ids = search(json.dumps(preprocess(query['latex'])), query['limit'])
-      results = re.sub("\s+", "", lookup(ids))
+      results = lookup(ids)
       code = 200 # OK
     except KeyError, e:
       results = {'error': str(e)}
@@ -48,7 +50,7 @@ def main():
     except Exception, e:
       results = {'error': str(e)}
       code = 500 # Internal server error
-    sys.stdout.write("{\"code\":%s, \"json\":%s}\n" % (code,results))
+    sys.stdout.write("%s\n" % json.dumps({'code':code, 'json':results}))
     sys.stdout.flush()
 
 if __name__ == "__main__":
