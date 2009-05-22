@@ -10,9 +10,6 @@ and id = string
 
 and ids = id list
 
-and documents =
-  < rows : < id : id ; doc : Json_type.t > list >
-
 and query_args =
   < query :
     < ?latex : string = "[]"
@@ -69,20 +66,6 @@ let save_index index =
 
 let db_url = "http://localhost:5984/documents/"
 
-let get_document id =
-  let url = db_url ^ id in
-  let json = Json_io.json_of_string (Http.http_get url) in
-  (document_of_json json)#content
-
-let get_all_documents () =
-  let url = db_url ^ "_all_docs?include_docs=true" in
-  try
-    let json = Json_io.json_of_string (Http.http_get url) in
-    (documents_of_json json)#rows
-  with _ ->
-    flush_line "Error contacting database (documents)";
-    raise Exit
-
 (* Queries *)
 
 let run_query bktree latex limit =
@@ -117,21 +100,27 @@ let handle_queries () =
     handle_query bktree input
   done
 
-(* Restarting the index *)
+(* Restarting the index search handler *)
 
 let restart_index () =
   try
     ignore (Http.http_get (db_url ^ "_external/index?exit=true"));
-    flush_line "Failed to restart the index process"
+    flush_line "Failed to restart the index search handler"
   with Http_client.Http_error (code,msg) ->
     if code = 500
-    then flush_line "Restarted the index process"
-    else flush_line "Failed to restart the index process"
+    then flush_line "Restarted the index search handler"
+    else flush_line "Failed to restart the search handler"
 
 (* Updates *)
 
-let get_updates last_update =
-  let url = db_url ^ "_all_docs_by_seq?include_docs=true&startkey=" ^ (string_of_int last_update) in
+let batch_size = 5000
+
+let get_update_batch last_update =
+  let url =
+    db_url ^
+    "_all_docs_by_seq?include_docs=true" ^
+    "&startkey=" ^ (string_of_int last_update) ^
+    "&endkey=" ^ (string_of_int (last_update + batch_size)) in
   try
     let json = Json_io.json_of_string (Http.http_get url) in
     (updates_of_json json)#rows
@@ -148,54 +137,39 @@ let run_update index update =
       else Bktree.add (Bktree.node_of update#id (document_of_json update#doc)#content) bktree in
     {bktree=bktree; last_update=update#key}
   with _ ->
-    flush_line ("Update failed for dfragment: " ^ update#id ^ "");
+    flush_line ("Update failed for fragment: " ^ update#id ^ "");
     index
 
-let run_updates () =
-  flush_line "Loading index";
-  let index = load_index () in
-  flush_line "Fetching updates";
-  let updates = get_updates index.last_update in
+let run_update_batch batchsize index =
+  flush_line ("Fetching next " ^ (string_of_int batchsize) ^ " updates");
+  let updates = get_update_batch index.last_update in
   flush_line "Updating...";
   let index = List.fold_left run_update index updates in
   flush_line "Saving index";
   save_index index;
+  index
+
+let run_updates () =
+  flush_line "Loading index";
+  let index = load_index () in
+  let rec run_update_batches index =
+    let index' = run_update_batch 5000 index in
+    if index.last_update != index'.last_update then run_update_batches index' else () in
+  run_update_batches index;
   restart_index ()
 
-(* Building *)
+(* Initialising index *)
 
-let get_last_update () =
-  let url = db_url ^ "_all_docs_by_seq?descending=true&limit=1" in
-  try
-    let json = Json_io.json_of_string (Http.http_get url) in
-    (List.hd (updates_of_json json)#rows)#key
-  with _ ->
-    flush_line "Error contacting database (documents)";
-    raise Exit
-
-let build_index () =
-  flush_line "Fetching documents";
-  let last_update = get_last_update () in
-  let docs = get_all_documents () in
-  flush_line "Building...";
-  let add_doc bktree row =
-    try
-      let latex = (document_of_json row#doc)#content in
-      Bktree.add (Bktree.node_of row#id latex) bktree
-    with _ ->
-      flush_line ("Add failed for fragment: " ^ row#id ^ "");
-      bktree in
-  let bktree = List.fold_left add_doc Bktree.Empty docs in
-  flush_line "Saving index";
-  save_index { last_update = last_update ; bktree = bktree };
-  restart_index ()
+let init_index () =
+  flush_line "Creating index";
+  save_index { last_update = 0 ; bktree = Bktree.Empty }
 
 (* Main *)
 
 open Arg
 let _ = parse
-  [("-rebuild", Unit build_index, ": Rebuild the index from scratch")
-  ;("-update", Unit run_updates, ": Update the existing index")
+  [("-init", Unit init_index, ": Create an empty index")
+  ;("-update", Unit run_updates, ": Update the index")
   ;("-query", Unit handle_queries, ": Handle index queries as a couchdb _external")]
   ignore
   "Use 'index -help' for available options"
