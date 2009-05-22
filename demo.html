@@ -12,10 +12,11 @@
   var body = document.getElementById("body");
   var latex = document.getElementById("latex");
   var results = document.getElementById("results");
+  var limit = 10;
 
   function search()
   {
-    var url = "/documents/_external/search?limit=10&latex=" + escape(latex.value);
+    var url = "/documents/_external/search?limit=" + limit + "&latex=" + escape(latex.value);
 
     searchRequest = new XMLHttpRequest();
     searchRequest.onreadystatechange = searchCallback;

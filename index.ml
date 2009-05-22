@@ -136,8 +136,12 @@ let run_update index update =
     flush_line ("Update failed for fragment: " ^ update#id ^ "");
     index
 
-let run_update_batch batchsize index =
-  flush_line ("Fetching next " ^ (string_of_int batchsize) ^ " updates");
+let run_update_batch index =
+  flush_line
+    ("Fetching updates " ^
+    (string_of_int index.last_update) ^
+    " through " ^
+    (string_of_int (index.last_update + batch_size)));
   let updates = get_update_batch index.last_update in
   flush_line "Updating...";
   let index = List.fold_left run_update index updates in
@@ -149,9 +153,10 @@ let run_updates () =
   flush_line "Loading index";
   let index = load_index () in
   let rec run_update_batches index =
-    let index' = run_update_batch 5000 index in
+    let index' = run_update_batch index in
     if index.last_update != index'.last_update then run_update_batches index' else () in
   run_update_batches index;
+  flush_line ("Finished updating at update: " ^ (string_of_int index.last_update));
   restart_index ();
   flush_line "Ok"
 
@@ -170,9 +175,13 @@ let init_index () =
 (* Main *)
 
 open Arg
-let _ = parse
+  let _ = parse
   [("-init", Unit init_index, ": Create an empty index")
   ;("-update", Unit run_updates, ": Update the index")
   ;("-query", Unit handle_queries, ": Handle index queries as a couchdb _external")]
   ignore
   "Use 'index -help' for available options"
+
+let _ =
+  let index = load_index () in
+  Marshal.to_string (index : index) [Marshal.No_sharing]
