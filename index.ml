@@ -37,13 +37,9 @@ type index =
 let store_url = "http://localhost:5984/store/"
 
 let load_index_revision () =
-  try
-    let index_url = store_url ^ "index" in
-    let json = Json_io.json_of_string (Http.http_get index_url) in
-    (revision_of_json json)#rev
-  with _ ->
-    flush_line "Error contacting database (store/index)";
-    raise Exit
+  let index_url = store_url ^ "index" in
+  let json = Json_io.json_of_string (Http.http_get index_url) in
+  (revision_of_json json)#rev
 
 let load_index () =
   try
@@ -156,13 +152,20 @@ let run_updates () =
     let index' = run_update_batch 5000 index in
     if index.last_update != index'.last_update then run_update_batches index' else () in
   run_update_batches index;
-  restart_index ()
+  restart_index ();
+  flush_line "Ok"
 
 (* Initialising index *)
 
 let init_index () =
-  flush_line "Creating index";
-  save_index { last_update = 0 ; bktree = Bktree.Empty }
+  print_string "This will erase the existing index. Are you sure? (y/n):"; flush stdout;
+  if read_line () = "y"
+  then
+    (flush_line "Saving index";
+     save_index { last_update = 0 ; bktree = Bktree.Empty };
+     flush_line "Ok")
+  else
+    flush_line "Ok, nothing was done"
 
 (* Main *)
 

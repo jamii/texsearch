@@ -128,7 +128,7 @@ if __name__ == '__main__':
         addXml(arg)
       if opt == "--del":
         delXml(arg)
-    print "OK!"
+    print "Ok"
   except getopt.GetoptError:
     usage()
     sys.exit(2)
