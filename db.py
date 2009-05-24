@@ -17,13 +17,9 @@ def initDB():
   print "Deleting existing databases"
   conn.request("DELETE", "/documents")
   conn.getresponse().read()
-  conn.request("DELETE", "/store")
-  conn.getresponse().read()
 
   print "Creating new databases"
   conn.request("PUT", "/documents")
-  expectResponse(conn,201)
-  conn.request("PUT", "/store")
   expectResponse(conn,201)
 
   print "Creating views"
@@ -49,9 +45,6 @@ def initDB():
   except IOError:
     print "Could not find the demo page (demo.html)"
     sys.exit(1)
-
-  conn.request("PUT", "/store/index", json.dumps({}))
-  expectResponse(conn,201)
 
   conn.close()
 
