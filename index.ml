@@ -34,28 +34,23 @@ type index =
 
 (* Persisting *)
 
-let store_url = "http://localhost:5984/store/"
-
-let load_index_revision () =
-  let index_url = store_url ^ "index" in
-  let json = Json_io.json_of_string (Http.http_get index_url) in
-  (revision_of_json json)#rev
-
 let load_index () =
   try
-    let attachment_url = store_url ^ "index/index" in
-    (Marshal.from_string (Http.http_get attachment_url) 0 : index)
+    let index_file = open_in_bin "/opt/texsearch/index_store" in
+    let index = (Marshal.from_channel index_file : index) in
+    close_in index_file;index
   with _ ->
-    flush_line "Error contacting database (store/index)";
+    flush_line "Could not open file /opt/texsearch/index_store";
     raise Exit
 
 let save_index index =
   try
-    let revision = load_index_revision () in
-    let attachment_url = store_url ^ "index/index?rev=" ^ revision in
-    ignore (Http.http_put attachment_url (Marshal.to_string (index : index) [Marshal.No_sharing]))
+    let index_file = open_out_bin "/opt/texsearch/index_store_tmp" in
+    Marshal.to_channel index_file index [Marshal.No_sharing];
+    close_out index_file;
+    Unix.rename "/opt/texsearch/index_store_tmp" "/opt/texsearch/index_store"
   with _ ->
-    flush_line "Error contacting database (store/index)";
+    flush_line "Could not save to file /opt/texsearch/index_store";
     raise Exit
 
 (* Database interaction *)

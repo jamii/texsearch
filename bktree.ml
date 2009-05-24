@@ -10,7 +10,7 @@ let node_of id latex =
     { id = id
     ; latex = latex }
 
-let dist a b = Edit.left_edit_distance a.latex b.latex
+let dist a b = Edit.left_edit_distance a b
 
 type bktree =
   | Empty
@@ -27,7 +27,7 @@ let add node bktree =
     match bktree with
     | Empty -> empty_branch node
     | Branch (root,del,bucket,branch) ->
-        let d = dist node root in
+        let d = dist node.latex root.latex in
         if d < bucket_size
         then Branch (root,del,node::bucket,branch)
         else
@@ -50,7 +50,7 @@ let delete id bktree =
   loop bktree
 
 type search =
-  { target : node
+  { target : Latex.t
   ; unsearched : (bktree, int) Pqueue.t
   ; sorting : (id, int) Pqueue.t
   ; sorted : (id, int) Pqueue.t
@@ -58,8 +58,7 @@ type search =
   ; cutoff : int }
 
 let search latex bktree =
-  let node = node_of "" latex in
-  { target = node
+  { target = latex
   ; unsearched =
       (match bktree with
         | Empty -> Pqueue.empty
@@ -67,18 +66,18 @@ let search latex bktree =
   ; sorting = Pqueue.empty
   ; sorted = Pqueue.empty
   ; min_dist = 0
-  ; cutoff = (Array.length (node.latex) / 3) + 1}
+  ; cutoff = (Array.length latex / 3) + 1}
 
-let insert_result node d search =
+let insert_result id d search =
   if d < search.cutoff
   then
     if d < search.min_dist
-    then {search with sorted = Pqueue.add node d search.sorted}
-    else {search with sorting = Pqueue.add node d search.sorting}
+    then {search with sorted = Pqueue.add id d search.sorted}
+    else {search with sorting = Pqueue.add id d search.sorting}
   else search
 
 let insert_results nodes search =
-  List.fold_left (fun search node -> insert_result node.id (dist search.target node) search) search nodes
+  List.fold_left (fun search node -> insert_result node.id (dist search.target node.latex) search) search nodes
 
 let update_min_dist d search =
   let min_dist = max search.min_dist d in
@@ -116,7 +115,7 @@ let next k search =
                 match bktree with
                   (* Empty trees never make it into the search queue *)
                   | Branch (root,del,bucket,branch) ->
-                      let d = dist search.target root in
+                      let d = dist search.target root.latex in
                       let unsearched = ref search.unsearched in
                       (for i = 0 to branch_size - 1 do
                         match branch.(i) with
