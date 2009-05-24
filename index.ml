@@ -4,7 +4,9 @@ let flush_line str = print_string str; print_string "\n"; flush stdout
 
 (* Types and json parsing *)
 
-type json document = < content : Latex.t >
+type json document =
+  < doi : string
+  ; content : Latex.t >
 
 and id = string
 
@@ -125,7 +127,9 @@ let run_update index update =
     let bktree =
       if update#value#deleted
       then bktree
-      else Bktree.add (Bktree.node_of update#id (document_of_json update#doc)#content) bktree in
+      else
+        let doc = document_of_json update#doc in
+        Bktree.add (Bktree.node_of update#id doc#doi doc#content) bktree in
     {bktree=bktree; last_update=update#key}
   with _ ->
     flush_line ("Update failed for fragment: " ^ update#id ^ "");

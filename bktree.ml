@@ -4,10 +4,12 @@ type id = string
 
 type node =
   { id : id
+  ; doi : string
   ; latex : Latex.t }
 
-let node_of id latex =
+let node_of id doi latex =
     { id = id
+    ; doi = doi
     ; latex = latex }
 
 let dist a b = Edit.left_edit_distance a b
