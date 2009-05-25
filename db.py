@@ -98,6 +98,7 @@ def delXml(fileName):
       dois.append(doi)
 
   # Retrieve docs by doi
+  print "Fetching database ids"
   docs = by_doi(dois)
 
   # Delete docs
