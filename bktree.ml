@@ -14,119 +14,117 @@ let node_of id doi latex =
 
 let dist a b = Edit.left_edit_distance a b
 
-type bktree =
-  | Empty
-  | Branch of node * bool * node list * bktree array
+module IntMap = Map.Make (struct
+  type t = int
+  let compare = compare
+end)
 
-let branch_size = 20
-let bucket_size = 5
+type bktree =
+  { root : node
+  ; mutable root_deleted : bool
+  ; mutable bucket : node list
+  ; mutable children : bktree IntMap.t }
+
+let empty =
+  { root = node_of "" "" (Array.create 0 0)
+  ; root_deleted = true
+  ; bucket = []
+  ; children = IntMap.empty }
 
 let empty_branch node =
-  Branch (node, false, [], Array.make (branch_size + 1) Empty)
+  { root = node
+  ; root_deleted = false
+  ; bucket = []
+  ; children = IntMap.empty }
 
-let add node bktree =
-  let rec add_node bktree =
-    match bktree with
-    | Empty -> empty_branch node
-    | Branch (root,del,bucket,branch) ->
-        let d = dist node.latex root.latex in
-        if d < bucket_size
-        then Branch (root,del,node::bucket,branch)
-        else
-          let i = min (d / bucket_size) branch_size in
-          branch.(i) <- add_node branch.(i);
-          bktree in
-  add_node bktree
+let rec add node bktree =
+  let d = dist node.latex bktree.root.latex in
+  if d = 0
+  then bktree.bucket <- node :: bktree.bucket
+  else
+    try
+      add node (IntMap.find d bktree.children)
+    with Not_found ->
+      bktree.children <- IntMap.add d (empty_branch node) bktree.children
 
-let delete id bktree =
-  let rec loop bktree =
-    match bktree with
-    | Empty -> Empty
-    | Branch (root,del,bucket,branch) ->
-        let del = if root.id = id then true else del in
-        let bucket = List.filter (fun node -> node.id != id) bucket in
-        for i = 0 to branch_size do
-          branch.(i) <- loop branch.(i)
-        done;
-        Branch (root,del,bucket,branch) in
-  loop bktree
+let rec delete id bktree =
+  if bktree.root.id = id then bktree.root_deleted <- true else ();
+  bktree.bucket <- List.filter (fun node -> node.id != id) bktree.bucket;
+  IntMap.iter (fun _ child -> delete id child) bktree.children
 
 type search =
   { target : Latex.t
-  ; unsearched : (bktree, int) Pqueue.t
-  ; sorting : (id, int) Pqueue.t
-  ; sorted : (id, int) Pqueue.t
-  ; min_dist : int
-  ; cutoff : int }
+  ; cutoff : int
+  ; unsearched : bktree list array
+  ; results : id list array
+  ; mutable safe_results : int (* Number of results with distance < min_dist *)
+  ; mutable min_dist : int (* Minimum distance to an unsearched node *)}
 
-let search latex bktree =
-  { target = latex
-  ; unsearched =
-      (match bktree with
-        | Empty -> Pqueue.empty
-        | Branch _ -> Pqueue.add bktree 0 Pqueue.empty)
-  ; sorting = Pqueue.empty
-  ; sorted = Pqueue.empty
-  ; min_dist = 0
-  ; cutoff = (Array.length latex / 3) + 1}
-
-let insert_result id d search =
-  if d < search.cutoff
-  then
-    if d < search.min_dist
-    then {search with sorted = Pqueue.add id d search.sorted}
-    else {search with sorting = Pqueue.add id d search.sorting}
-  else search
+let insert_result d id search =
+  if d >= search.cutoff then () else
+  (search.results.(d) <- id :: search.results.(d);
+  if d < search.min_dist then search.safe_results <- search.safe_results + 1 else ())
 
 let insert_results nodes search =
-  List.fold_left (fun search node -> insert_result node.id (dist search.target node.latex) search) search nodes
+  List.iter (fun node -> insert_result (dist search.target node.latex) node.id search) nodes
 
-let update_min_dist d search =
-  let min_dist = max search.min_dist d in
-  let (safe_results,rest) = Pqueue.split_at_priority min_dist search.sorting in
-  {search with sorted = search.sorted @ safe_results; sorting = rest; min_dist = min_dist}
+exception Broken
 
-let next_search_node search =
-  if search.min_dist > search.cutoff
-  then None
-  else
-    match Pqueue.pop search.unsearched with
-      | None -> None
-      | Some ((bktree,d),unsearched) ->
-          Some (bktree, update_min_dist d {search with unsearched = unsearched})
+let insert_unsearched_node d node search =
+  let d = max d 0 in
+  if d >= search.cutoff then () else
+  if d >= search.min_dist
+  then search.unsearched.(d) <- node :: search.unsearched.(d)
+  else raise Broken
 
-type result =
-  | More of (id * int) list * search
-  | Last of (id * int) list
+let new_search latex bktree =
+  let cutoff = (Array.length latex / 3) + 1 in
+  let search =
+    { target = latex
+    ; cutoff = cutoff
+    ; unsearched = Array.make cutoff []
+    ; results = Array.make cutoff []
+    ; safe_results = 0
+    ; min_dist = 0 } in
+  IntMap.iter (fun i node -> insert_unsearched_node ((Array.length latex)-i) node search) bktree.children;
+  search
+
+let rec next_search_node search =
+  if search.min_dist >= search.cutoff then None else
+  match search.unsearched.(search.min_dist) with
+    | [] ->
+      search.min_dist <- search.min_dist + 1;
+      search.safe_results <- search.safe_results + List.length(search.results.(search.min_dist));
+      next_search_node search
+    | (bktree::rest) ->
+      search.unsearched.(search.min_dist) <- rest;
+      Some bktree
 
 let next k search =
-  let rec loop search =
-    match Pqueue.split_at_length k (search.sorted) with
+  let rec loop () =
+    if search.safe_results >= k
+    then
       (* We have enough results to return *)
-      | Some (results,rest) -> More (results, {search with sorted = rest})
+      let results = ref [] in
+      for i = search.min_dist - 1 downto 0 do
+        results := search.results.(i) @ !results
+      done;
+      Util.take k !results
+    else
       (* We need to carry on searching *)
-      | None ->
-          match next_search_node search with
-            (* Nothing left to search *)
-            | None ->
-                (match search.sorting with
-                  | [] -> Last (Pqueue.to_list search.sorted)
-                  | _ -> loop {search with sorted = Pqueue.append search.sorted search.sorting; sorting = Pqueue.empty})
-            (* Search in bktree *)
-            | Some (bktree,search) ->
-                match bktree with
-                  (* Empty trees never make it into the search queue *)
-                  | Branch (root,del,bucket,branch) ->
-                      let d = dist search.target root.latex in
-                      let unsearched = ref search.unsearched in
-                      (for i = 0 to branch_size - 1 do
-                        match branch.(i) with
-                          | Empty -> ()
-                          | Branch _ as b -> unsearched := Pqueue.add b (d - (i*bucket_size)) !unsearched
-                      done);
-                      (match branch.(branch_size) with
-                          | Empty -> ()
-                          | Branch _ as b -> unsearched := Pqueue.add b 0 !unsearched);
-                      let search = if del then search else insert_result root.id d search in
-                      loop (insert_results bucket {search with unsearched = !unsearched}) in
-  loop search
+      match next_search_node search with
+        (* Nothing left to search *)
+        | None ->
+            let results = ref [] in
+            for i = search.cutoff - 1 downto 0 do
+              results := search.results.(i) @ !results
+            done;
+            Util.take k !results
+        (* Search in bktree *)
+        | Some bktree ->
+            (let d = dist search.target bktree.root.latex in
+            IntMap.iter (fun i node -> insert_unsearched_node (d-i) node search) bktree.children;
+            if bktree.root_deleted then () else insert_result d bktree.root.id search;
+            insert_results bktree.bucket search;
+            loop ()) in
+  loop ()

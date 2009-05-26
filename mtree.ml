@@ -2,15 +2,15 @@ type id = string
 
 type node =
   { id : id
-  ; latex : Latex.t
-  ; suffixes : Latex.element array }
+  ; doi : string
+  ; latex : Latex.t}
 
-let node_of id latex =
+let node_of id doi latex =
     { id = id
-    ; latex = latex
-    ; suffixes = Edit.suffixes latex }
+    ; doi = doi
+    ; latex = latex }
 
-let query_dist a b = Edit.left_edit_distance a.suffixes b.suffixes
+let query_dist a b = Edit.left_edit_distance a.latex b.latex
 
 type branch =
   { neither : mtree
@@ -45,7 +45,7 @@ let rec add node mtree =
     | Empty -> Blob (node,[])
     | Blob (e,es) ->
         let dist = query_dist node e in
-        if dist < 5
+        if dist < 3
         then Blob (e,node::es)
         else List.fold_left (fun mtree node -> add node mtree) (Branch (root_of node, root_of e, dist, empty_branch)) es
     | Branch (l,r,radius,branch) ->
@@ -86,7 +86,7 @@ type search =
   ; cutoff : int}
 
 let search latex mtree =
-  let e = node_of "" latex in
+  let e = node_of "" "" latex in
   { target = e
   ; unsearched =
       (match mtree with
@@ -95,7 +95,7 @@ let search latex mtree =
   ; sorting = Pqueue.empty
   ; sorted = Pqueue.empty
   ; min_dist = 0
-  ; cutoff = (Array.length (e.suffixes) / 3) + 1}
+  ; cutoff = (Array.length (e.latex) / 3) + 1}
 
 let insert_result e dist search =
   if dist < search.cutoff

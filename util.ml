@@ -18,3 +18,9 @@ let filter_map f ls =
   List.map (fun l -> match l with Some a -> a) (
   (List.filter (fun l -> l != None) (
   List.map f ls)))
+
+let rec take k ls =
+  if k = 0 then [] else
+  match ls with
+    | [] -> []
+    | (l::ls) -> l :: take (k-1) ls

@@ -62,9 +62,7 @@ let db_url = "http://localhost:5984/documents/"
 (* Queries *)
 
 let run_query bktree latex limit =
-  match Bktree.next limit (Bktree.search latex bktree) with
-    | Bktree.Last results -> List.map fst results
-    | Bktree.More (results,_) -> List.map fst results
+  Bktree.next limit (Bktree.new_search latex bktree)
 
 let handle_query bktree str =
   let response, code =
@@ -123,14 +121,13 @@ let get_update_batch last_update =
 
 let run_update index update =
   try
-    let bktree = Bktree.delete update#id index.bktree in
-    let bktree =
-      if update#value#deleted
-      then bktree
-      else
-        let doc = document_of_json update#doc in
-        Bktree.add (Bktree.node_of update#id doc#doi doc#content) bktree in
-    {bktree=bktree; last_update=update#key}
+    Bktree.delete update#id index.bktree;
+    if not (update#value#deleted)
+    then
+      let doc = document_of_json update#doc in
+      Bktree.add (Bktree.node_of update#id doc#doi doc#content) index.bktree
+    else ();
+    {index with last_update=update#key}
   with _ ->
     flush_line ("Update failed for fragment: " ^ update#id ^ "");
     index
@@ -146,7 +143,7 @@ let run_update_batch index =
   let index = List.fold_left run_update index updates in
   flush_line "Saving index";
   save_index index;
-  index
+  load_index ()
 
 let run_updates () =
   flush_line "Loading index";
@@ -166,7 +163,7 @@ let init_index () =
   if read_line () = "y"
   then
     (flush_line "Saving index";
-     save_index { last_update = 0 ; bktree = Bktree.Empty };
+     save_index { last_update = 0 ; bktree = Bktree.empty };
      flush_line "Ok")
   else
     flush_line "Ok, nothing was done"
