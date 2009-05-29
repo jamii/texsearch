@@ -11,3 +11,9 @@ def expectResponse(conn,code):
   if response.status != code:
     raise UnexpectedResponse(code,response.status)
   return response.read()
+
+def encodeDoi(doi):
+  return doi.replace("/","_")
+
+def decodeDoi(doi):
+  return doi.replace("_","/")

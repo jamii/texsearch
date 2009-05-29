@@ -1,9 +1,9 @@
 #!/bin/env python
-import sys, httplib
+import sys, httplib, urllib
 from xml.dom import minidom
 from preprocessor import preprocess
 import simplejson as json
-from util import expectResponse
+from util import expectResponse, encodeDoi, decodeDoi
 
 def initDB():
   # Warn user
@@ -55,16 +55,11 @@ def postDocs(docs):
   expectResponse(conn,201)
   conn.close()
 
-def by_doi(dois):
-  conn = httplib.HTTPConnection("localhost:5984")
-  headers = {"Content-type": "application/json"}
-  conn.request("POST", "/documents/_design/search/_view/by_doi", json.dumps({'keys':dois}), headers)
-  result = json.loads(expectResponse(conn,200))
-  ids = []
-  for row in result['rows']:
-    ids.append(row['value'])
-  return ids
-  conn.close()
+def stuffDocs(docs):
+  for i in xrange(1,100):
+    for doc in docs:
+      doc['_id'] = doc['_id'][:-1] + str(i)
+    postDocs(docs)
 
 # Bulk process a xml document
 def addXml(fileName):
@@ -76,35 +71,32 @@ def addXml(fileName):
     if item.nodeName == u'result':
       doi = item.childNodes[0].childNodes[0].wholeText
       print ("Parsing %s" % doi)
-      for node in item.childNodes[1:]:
-        source = node.childNodes[0].wholeText
-        content = preprocess("\\begin{document}"+source+"\\end{document}")
-        doc = {'doi': doi, 'source': source, 'content': content}
-        docs.append(doc)
+      source = {}
+      content = {}
+      for i in xrange(1,len(item.childNodes)):
+        latex = item.childNodes[i].childNodes[0].wholeText
+        source[str(i)] = latex
+        content[str(i)] = preprocess("\\begin{document}"+latex+"\\end{document}")
+      doc = {'_id': encodeDoi(doi), 'source': source, 'content': content}
+      docs.append(doc)
 
   # Add docs
   print "Adding..."
-  postDocs(docs)
+  stuffDocs(docs)
 
 def delXml(fileName):
   xml = minidom.parse(fileName)
 
   # Collect dois
-  dois = []
+  docs = []
   for item in xml.childNodes[0].childNodes:
     if item.nodeName == u'result':
       doi = item.childNodes[0].childNodes[0].wholeText
       print ("Parsing %s" % doi)
-      dois.append(doi)
-
-  # Retrieve docs by doi
-  print "Fetching database ids"
-  docs = by_doi(dois)
+      docs.append({'_id': encodeDoi(doi), '_deleted':True})
 
   # Delete docs
   print "Deleting..."
-  for doc in docs:
-    doc['_deleted'] = True
   postDocs(docs)
 
 def usage():

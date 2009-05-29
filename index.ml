@@ -4,18 +4,17 @@ let flush_line str = print_string str; print_string "\n"; flush stdout
 
 (* Types and json parsing *)
 
-type json document =
-  < doi : string
-  ; content : Latex.t >
+type json doi = string
 
 and id = string
 
-and ids = id list
+and document =
+  < content : (string * Latex.t) assoc > (* string -> id *)
 
 and query_args =
   < query :
-    < ?latex : string = "[]"
-    ; ?limit : string = "10"
+    < latex : string
+    ; limit : string
     ; ?exit : string = "false" > >
 
 and update =
@@ -27,8 +26,7 @@ and update =
 and updates =
   < rows : update list >
 
-and revision =
-  < rev "_rev" : string >
+and results = doi list
 
 type index =
   { last_update : int
@@ -40,7 +38,7 @@ let load_index () =
   try
     let index_file = open_in_bin "/opt/texsearch/index_store" in
     let index = (Marshal.from_channel index_file : index) in
-    close_in index_file;index
+    close_in index_file; index
   with _ ->
     flush_line "Could not open file /opt/texsearch/index_store";
     raise Exit
@@ -73,7 +71,7 @@ let handle_query bktree str =
       else
         let latex = Latex.of_json (Json_io.json_of_string query#latex) in
         let limit = int_of_string query#limit in
-        json_of_ids (run_query bktree latex limit), Json_type.Int 200 (* OK *)
+        json_of_results (run_query bktree latex limit), Json_type.Int 200 (* OK *)
     with
       | Json_type.Json_error _ | Latex.Bad_latex | Failure _ -> Json_type.Null, Json_type.Int 400 (* Bad request *)
       | _ -> Json_type.Null, Json_type.Int 500 (* Internal server error *) in
@@ -104,13 +102,12 @@ let restart_index () =
 
 (* Updates *)
 
-let batch_size = 5000
+let batch_size = 100
 
 let get_update_batch last_update =
   let url =
-    db_url ^
-    "_all_docs_by_seq?include_docs=true" ^
-    "&startkey=" ^ (string_of_int last_update) ^
+    db_url ^ "_all_docs_by_seq?include_docs=true" ^
+    "&startkey=" ^ (string_of_int (last_update + 1)) ^
     "&endkey=" ^ (string_of_int (last_update + batch_size)) in
   try
     let json = Json_io.json_of_string (Http.http_get url) in
@@ -125,7 +122,7 @@ let run_update index update =
     if not (update#value#deleted)
     then
       let doc = document_of_json update#doc in
-      Bktree.add (Bktree.node_of update#id doc#doi doc#content) index.bktree
+      Bktree.add (Bktree.node_of update#id doc#content) index.bktree
     else ();
     {index with last_update=update#key}
   with _ ->

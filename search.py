@@ -18,24 +18,18 @@ def search(latex,limit):
 
 def lookup(ids):
   conn = httplib.HTTPConnection("localhost:5984")
-  conn.request("POST", "/documents/_design/search/_view/results", "{\"keys\": %s}" % ids, headers)
+  conn.request("POST", "/documents/_all_docs?include_docs=true", "{\"keys\": %s}" % ids, headers)
   result = json.loads(expectResponse(conn,200))
   conn.close()
 
-  values = [row['value'] for row in result['rows']]
-  return values
+  #values = [row['value'] for row in result['rows']]
+  return result['rows']
 
 def requests():
   line = sys.stdin.readline()
   while line:
     yield json.loads(line)
     line = sys.stdin.readline()
-
-def test():
-  latex = preprocess("$$(h_b^2)$$")
-  ids = search(json.dumps(latex), 10)
-  results = re.sub("\s+", "", lookup(ids))
-  print results
 
 def main():
   for request in requests():

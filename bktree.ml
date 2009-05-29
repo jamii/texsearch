@@ -1,18 +1,27 @@
 open Latex
 
+type doi = string
 type id = string
 
 type node =
-  { id : id
-  ; doi : string
-  ; latex : Latex.t }
+  { doi : doi
+  ; equations : (id * Latex.t) list }
 
-let node_of id doi latex =
-    { id = id
-    ; doi = doi
-    ; latex = latex }
+let node_of doi equations =
+    { doi = doi
+    ; equations = equations }
 
-let dist a b = Edit.left_edit_distance a b
+let query_dist a bl =
+  Util.minimum (List.map (fun (_,b) ->
+    Edit.left_edit_distance a b)
+  bl)
+
+let index_dist al bl =
+  Util.maximum (List.map (fun (_,a) ->
+    Util.maximum (List.map (fun (_,b) ->
+      Edit.left_edit_distance a b)
+    bl))
+  al)
 
 module IntMap = Map.Make (struct
   type t = int
@@ -26,7 +35,7 @@ type bktree =
   ; mutable children : bktree IntMap.t }
 
 let empty =
-  { root = node_of "" "" (Array.create 0 0)
+  { root = node_of "" [("",Array.create 0 0)]
   ; root_deleted = true
   ; bucket = []
   ; children = IntMap.empty }
@@ -38,7 +47,7 @@ let empty_branch node =
   ; children = IntMap.empty }
 
 let rec add node bktree =
-  let d = dist node.latex bktree.root.latex in
+  let d = index_dist node.equations bktree.root.equations in
   if d = 0
   then bktree.bucket <- node :: bktree.bucket
   else
@@ -47,18 +56,18 @@ let rec add node bktree =
     with Not_found ->
       bktree.children <- IntMap.add d (empty_branch node) bktree.children
 
-let rec delete id bktree =
-  if bktree.root.id = id then bktree.root_deleted <- true else ();
-  bktree.bucket <- List.filter (fun node -> node.id != id) bktree.bucket;
-  IntMap.iter (fun _ child -> delete id child) bktree.children
+let rec delete doi bktree =
+  if bktree.root.doi = doi then bktree.root_deleted <- true else ();
+  bktree.bucket <- List.filter (fun node -> node.doi != doi) bktree.bucket;
+  IntMap.iter (fun _ child -> delete doi child) bktree.children
 
 type search =
   { target : Latex.t
   ; cutoff : int
-  ; unsearched : bktree list array
-  ; results : id list array
-  ; mutable safe_results : int (* Number of results with distance < min_dist *)
-  ; mutable min_dist : int (* Minimum distance to an unsearched node *)}
+  ; unsearched : bktree list array (* index nodes left to search *)
+  ; results : doi list array (* results.(i) is results with cost distance i *)
+  ; mutable safe_results : int (* number of results with distance < min_dist *)
+  ; mutable min_dist : int (* minimum distance to an unsearched node *)}
 
 let insert_result d id search =
   if d >= search.cutoff then () else
@@ -66,19 +75,15 @@ let insert_result d id search =
   if d < search.min_dist then search.safe_results <- search.safe_results + 1 else ())
 
 let insert_results nodes search =
-  List.iter (fun node -> insert_result (dist search.target node.latex) node.id search) nodes
-
-exception Broken
+  List.iter (fun node -> insert_result (query_dist search.target node.equations) node.doi search) nodes
 
 let insert_unsearched_node d node search =
-  let d = max d 0 in
   if d >= search.cutoff then () else
-  if d >= search.min_dist
-  then search.unsearched.(d) <- node :: search.unsearched.(d)
-  else raise Broken
+  let d = min search.min_dist (max d 0) in
+  search.unsearched.(d) <- node :: search.unsearched.(d)
 
 let new_search latex bktree =
-  let cutoff = (Array.length latex / 3) + 1 in
+  let cutoff = 1 + (Array.length latex / 3)  in
   let search =
     { target = latex
     ; cutoff = cutoff
@@ -93,8 +98,8 @@ let rec next_search_node search =
   if search.min_dist >= search.cutoff then None else
   match search.unsearched.(search.min_dist) with
     | [] ->
-      search.min_dist <- search.min_dist + 1;
       search.safe_results <- search.safe_results + List.length(search.results.(search.min_dist));
+      search.min_dist <- search.min_dist + 1;
       next_search_node search
     | (bktree::rest) ->
       search.unsearched.(search.min_dist) <- rest;
@@ -122,9 +127,9 @@ let next k search =
             Util.take k !results
         (* Search in bktree *)
         | Some bktree ->
-            (let d = dist search.target bktree.root.latex in
+            (let d = query_dist search.target bktree.root.equations in
             IntMap.iter (fun i node -> insert_unsearched_node (d-i) node search) bktree.children;
-            if bktree.root_deleted then () else insert_result d bktree.root.id search;
+            if bktree.root_deleted then () else insert_result d bktree.root.doi search;
             insert_results bktree.bucket search;
             loop ()) in
   loop ()

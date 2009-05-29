@@ -1,1 +1,1 @@
-{"_id":"_design/search","language":"javascript","views":{"by_doi":{"map":"function(doc) {\n  emit(doc.doi, {\"_id\":doc._id, \"_rev\":doc._rev});\n}"},"results":{"map":"function(doc) {\n  emit(doc._id,[doc.doi,doc.source]);\n}"}}}
+{"_id":"_design/search","language":"javascript","views":{"results":{"map":"function(doc) {\n  for eqn in doc.source {\n    emit([doc._id,eqn[0]], eqn[1]);\n  }\n}"}}}
