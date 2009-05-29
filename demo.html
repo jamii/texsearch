@@ -31,23 +31,18 @@
 
         body.removeChild(results);
         results = document.createElement('div');
-        function displayRow(row) {
-//           var a = document.createElement('a');
-//           a.textContent = row[0];
-//           a.href = "http://www.springerlink.com/content?k=doi%3a(" + row[0] + ")";
-//           results.appendChild(a);
-//
-//           var p = document.createElement('p');
-//           p.textContent = row[1];
-//           results.appendChild(p)
+        response.forEach(function (row) {
+          var a = document.createElement('a');
+          a.textContent = row[0];
+          a.href = "http://www.springerlink.com/content?k=doi%3a(" + row[0] + ")";
+          results.appendChild(a);
 
-          var p = document.createElement('p');
-          for (id in row.doc.source) {
-            p.textContent += row.doc.source[id];
-          }
-          results.appendChild(p)
-        }
-        response.forEach(displayRow);
+          row[1].forEach (function (eqn) {
+            var p = document.createElement('p');
+            p.textContent = eqn;
+            results.appendChild(p)
+          })
+        })
         body.appendChild(results);
 
       } else if (searchRequest.readyState == 4 && searchRequest.status != 200) {

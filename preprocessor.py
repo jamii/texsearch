@@ -63,11 +63,17 @@ def clean(node,output):
 
 from plasTeX.TeX import TeX
 
+class PreprocessorError(Exception):
+  pass
+
 def preprocess(string):
   # Instantiate a TeX processor and parse the input text
-  tex = TeX()
-  tex.disableLogging()
-  tex.input(string)
-  result = []
-  clean(tex.parse(),result)
-  return result
+  try:
+    tex = TeX()
+    tex.disableLogging()
+    tex.input(string)
+    result = []
+    clean(tex.parse(),result)
+    return result
+  except Exception:
+    raise PreprocessorError()

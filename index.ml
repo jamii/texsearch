@@ -9,24 +9,24 @@ type json doi = string
 and id = string
 
 and document =
-  < content : (string * Latex.t) assoc > (* string -> id *)
+  < content : (string * Latex.t) assoc > (* string is id *)
 
 and query_args =
   < query :
-    < latex : string
-    ; limit : string
-    ; ?exit : string = "false" > >
+    < latex : string > >
 
 and update =
   < id : id
   ; key : int
   ; value : < ?deleted : bool = false >
-  ; ?doc : Json_type.t >
+  ; doc : Json_type.t >
 
 and updates =
   < rows : update list >
 
-and results = doi list
+and result = doi * (id list)
+
+and results = result list
 
 type index =
   { last_update : int
@@ -66,12 +66,9 @@ let handle_query bktree str =
   let response, code =
     try
       let query = (query_args_of_json (Json_io.json_of_string str))#query in
-      if query#exit = "true"
-      then (flush_line "Received exit"; raise Exit)
-      else
-        let latex = Latex.of_json (Json_io.json_of_string query#latex) in
-        let limit = int_of_string query#limit in
-        json_of_results (run_query bktree latex limit), Json_type.Int 200 (* OK *)
+      let latex = Latex.of_json (Json_io.json_of_string query#latex) in
+      let limit = 10 in
+      json_of_results (run_query bktree latex limit), Json_type.Int 200 (* OK *)
     with
       | Json_type.Json_error _ | Latex.Bad_latex | Failure _ -> Json_type.Null, Json_type.Int 400 (* Bad request *)
       | _ -> Json_type.Null, Json_type.Int 500 (* Internal server error *) in
@@ -88,17 +85,6 @@ let handle_queries () =
     let input = input_line stdin in
     handle_query bktree input
   done
-
-(* Restarting the index search handler *)
-
-let restart_index () =
-  try
-    ignore (Http.http_get (db_url ^ "_external/index?exit=true"));
-    flush_line "Failed to restart the index search handler"
-  with Http_client.Http_error (code,msg) ->
-    if code = 500
-    then flush_line "Restarted the index search handler"
-    else flush_line "Failed to restart the search handler"
 
 (* Updates *)
 
@@ -126,7 +112,7 @@ let run_update index update =
     else ();
     {index with last_update=update#key}
   with _ ->
-    flush_line ("Update failed for fragment: " ^ update#id ^ "");
+    flush_line ("Update failed for document: " ^ update#id ^ "");
     index
 
 let run_update_batch index =
@@ -150,7 +136,6 @@ let run_updates () =
     if index.last_update != index'.last_update then run_update_batches index' else () in
   run_update_batches index;
   flush_line ("Finished updating at update: " ^ (string_of_int index.last_update));
-  restart_index ();
   flush_line "Ok"
 
 (* Initialising index *)

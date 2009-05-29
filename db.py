@@ -3,7 +3,7 @@ import sys, httplib, urllib
 from xml.dom import minidom
 from preprocessor import preprocess
 import simplejson as json
-from util import expectResponse, encodeDoi, decodeDoi
+from util import expectResponse, encodeDoi
 
 def initDB():
   # Warn user
@@ -82,7 +82,7 @@ def addXml(fileName):
 
   # Add docs
   print "Adding..."
-  stuffDocs(docs)
+  postDocs(docs)
 
 def delXml(fileName):
   xml = minidom.parse(fileName)
