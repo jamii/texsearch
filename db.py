@@ -22,17 +22,6 @@ def initDB():
   conn.request("PUT", "/documents")
   expectResponse(conn,201)
 
-  print "Adding demo page"
-  try:
-    demo = open('/opt/texsearch/demo.html','r')
-    headers = {"Content-Type": "text/html"}
-    conn.request("PUT", ("/documents/_design/search/demo.html?rev=%s" % revision), demo.read(), headers)
-    expectResponse(conn,201)
-    demo.close()
-  except IOError:
-    print "Could not find the demo page (demo.html)"
-    sys.exit(1)
-
   conn.close()
 
 def postDocs(docs):
