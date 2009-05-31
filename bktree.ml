@@ -1,5 +1,3 @@
-open Latex
-
 type doi = string
 type id = string
 
@@ -14,7 +12,7 @@ let node_of doi equations =
 let query_against query equations cutoff =
   List.fold_left
     (fun (min_dist,matches) (id,latex) ->
-      let dist = Edit.left_edit_distance query latex in
+      let dist = Query.distance query latex in
       if dist < cutoff then (min dist min_dist, id :: matches) else (min_dist, matches))
     (cutoff,[])
     equations
@@ -37,7 +35,7 @@ type bktree =
   ; mutable children : bktree IntMap.t }
 
 let empty =
-  { root = node_of "" [("",Array.create 0 0)]
+  { root = node_of "" [("",Latex.empty ())]
   ; root_deleted = true
   ; children = IntMap.empty }
 
@@ -60,7 +58,7 @@ let rec delete doi bktree =
 type result = doi * (id list)
 
 type search =
-  { target : Latex.t
+  { query : Query.t
   ; cutoff : int
   ; unsearched : bktree list array (* index nodes left to search *)
   ; results : result list array (* results.(i) is results with cost distance i *)
@@ -68,7 +66,7 @@ type search =
   ; mutable min_dist : int (* minimum distance to an unsearched node *)}
 
 let query_node search node node_deleted =
-  let (dist,matches) = query_against search.target node.equations search.cutoff in
+  let (dist,matches) = query_against search.query node.equations search.cutoff in
   if dist < search.cutoff && not node_deleted
   then search.results.(dist) <- (node.doi,matches) :: search.results.(dist)
   else ();
@@ -77,37 +75,37 @@ let query_node search node node_deleted =
   else ();
   dist
 
-let queue_node search node d =
+let push_search_node search node d =
   if d >= search.cutoff then () else
   let d = min search.min_dist (max d 0) in
   search.unsearched.(d) <- node :: search.unsearched.(d)
 
-let new_search latex bktree =
-  let cutoff = 1 + (Array.length latex / 3)  in
-  let search =
-    { target = latex
-    ; cutoff = cutoff
-    ; unsearched = Array.make cutoff []
-    ; results = Array.make cutoff []
-    ; safe_results = 0
-    ; min_dist = 0 } in
-  IntMap.iter (fun i node -> queue_node search node (Array.length latex - i)) bktree.children;
-  search
-
-let rec next_search_node search =
+let rec pop_search_node search =
   if search.min_dist >= search.cutoff then None else
   match search.unsearched.(search.min_dist) with
     | [] ->
       (* Nothing left at this distance *)
       search.safe_results <- search.safe_results + List.length(search.results.(search.min_dist));
       search.min_dist <- search.min_dist + 1;
-      next_search_node search
+      pop_search_node search
     | (bktree::rest) ->
       (* Search in bktree, put the rest back *)
       search.unsearched.(search.min_dist) <- rest;
       Some bktree
 
-let next k search =
+let new_search query bktree =
+  let cutoff = 1 + (Query.length query / 3)  in
+  let search =
+    { query = query
+    ; cutoff = cutoff
+    ; unsearched = Array.make cutoff []
+    ; results = Array.make cutoff []
+    ; safe_results = 0
+    ; min_dist = 0 } in
+  IntMap.iter (fun i node -> push_search_node search node (Query.length query - i)) bktree.children;
+  search
+
+let run_search k search =
   let rec loop () =
     if search.safe_results >= k
     then
@@ -119,7 +117,7 @@ let next k search =
       Util.take k !results
     else
       (* We need to carry on searching *)
-      match next_search_node search with
+      match pop_search_node search with
         (* Nothing left to search, return results *)
         | None ->
             let results = ref [] in
@@ -130,6 +128,6 @@ let next k search =
         (* Search in bktree *)
         | Some bktree ->
             let dist = query_node search bktree.root bktree.root_deleted in
-            IntMap.iter (fun i node -> queue_node search node (dist-i)) bktree.children;
+            IntMap.iter (fun i node -> push_search_node search node (dist-i)) bktree.children;
             loop () in
   loop ()

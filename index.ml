@@ -11,9 +11,11 @@ and id = string
 and document =
   < content : (string * Latex.t) assoc > (* string is id *)
 
-and query_args =
-  < query :
-    < latex : string > >
+and request =
+  < args "query" :
+    < searchTerm : string
+    ; ?startResult : string = "0"
+    ; ?endResult : string option > >
 
 and update =
   < id : id
@@ -59,18 +61,18 @@ let db_url = "http://localhost:5984/documents/"
 
 (* Queries *)
 
-let run_query bktree latex limit =
-  Bktree.next limit (Bktree.new_search latex bktree)
+let run_query bktree query limit =
+  Bktree.run_search limit (Bktree.new_search query bktree)
 
 let handle_query bktree str =
   let response, code =
     try
-      let query = (query_args_of_json (Json_io.json_of_string str))#query in
-      let latex = Latex.of_json (Json_io.json_of_string query#latex) in
+      let args = (request_of_json (Json_io.json_of_string str))#args in
+      let query = Query.of_string args#searchTerm in
       let limit = 10 in
-      json_of_results (run_query bktree latex limit), Json_type.Int 200 (* OK *)
+      json_of_results (run_query bktree query limit), Json_type.Int 200 (* OK *)
     with
-      | Json_type.Json_error _ | Latex.Bad_latex | Failure _ -> Json_type.Null, Json_type.Int 400 (* Bad request *)
+      | Json_type.Json_error _ | Failure _ | Query.Parse_error -> Json_type.Null, Json_type.Int 400 (* Bad request *)
       | _ -> Json_type.Null, Json_type.Int 500 (* Internal server error *) in
   let output =
     Json_io.string_of_json ~compact:true
@@ -159,7 +161,3 @@ open Arg
   ;("-query", Unit handle_queries, ": Handle index queries as a couchdb _external")]
   ignore
   "Use 'index -help' for available options"
-
-let _ =
-  let index = load_index () in
-  Marshal.to_string (index : index) [Marshal.No_sharing]
