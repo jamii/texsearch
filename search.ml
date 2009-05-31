@@ -1,3 +1,8 @@
+(*
+Toplevel interaction with the search index.
+This mostly consists of I/O and error handling.
+*)
+
 module Http = Http_client.Convenience
 
 let flush_line str = print_string str; print_string "\n"; flush stdout
@@ -9,16 +14,18 @@ type json doi = string
 and id = string
 
 and document =
-  < content : (string * Latex.t) assoc > (* string is id *)
+  < content : (string * Latex.t) assoc (* id*Latex.t *)
+  ; source : (string * string) assoc > (* id*string *)
 
 and request =
   < args "query" :
     < searchTerm : string
-    ; ?startResult : string = "0"
-    ; ?endResult : string option > >
+    ; ?startAt : string option
+    ; ?endAt : string option
+    ; ?encoding : string = "xml" > >
 
 and update =
-  < id : id
+  < id : doi
   ; key : int
   ; value : < ?deleted : bool = false >
   ; doc : Json_type.t >
@@ -26,7 +33,7 @@ and update =
 and updates =
   < rows : update list >
 
-and result = doi * (id list)
+and result = doi * (string list)
 
 and results = result list
 
@@ -59,27 +66,73 @@ let save_index index =
 
 let db_url = "http://localhost:5984/documents/"
 
+let get_document doi =
+  let url = db_url ^ doi in
+  let json = Json_io.json_of_string (Http.http_get url) in
+  document_of_json json
+
+let get_result (doi,ids) =
+  let source = (get_document doi)#source in
+  (doi, List.map (fun id -> List.assoc id source) ids)
+
+let preprocess latex_string =
+  let url = db_url ^ "_external/preprocess?latex=" ^ latex_string in
+  let latex_json = Http.http_get url in
+  Latex.of_json (Json_io.json_of_string latex_json)
+
+(* Responses to couchdb *)
+
+type response =
+  | Ok of Json_type.t
+  | BadRequest
+  | InternalServerError
+
+let json_response results =
+  Json_type.Object
+    [ ("code",Json_type.Int 200)
+    ; ("json",json_of_results results) ]
+
+let xml_of_results results =
+  let xml_of_source source =
+    Xml.Element ("Equation", [], [Xml.PCData source]) in
+  let xml_of_result (doi,sources) =
+    Xml.Element ("Result", [], (List.map xml_of_source sources)) in
+  Xml.to_string (Xml.Element ("Results", [], (List.map xml_of_result results)))
+
+let xml_response results =
+  Json_type.Object
+    [ ("code",Json_type.Int 200)
+    ; ("headers",Json_type.Object [("Content-type",Json_type.String "text/xml")])
+    ; ("body",Json_type.String (xml_of_results results)) ]
+
 (* Queries *)
 
-let run_query bktree query limit =
-  Bktree.run_search limit (Bktree.new_search query bktree)
+let run_query bktree query startAt endAt =
+  List.map get_result (Util.drop startAt (Bktree.run_search endAt (Bktree.new_search query bktree)))
 
 let handle_query bktree str =
-  let response, code =
+  let response =
     try
       let args = (request_of_json (Json_io.json_of_string str))#args in
-      let query = Query.of_string args#searchTerm in
-      let limit = 10 in
-      json_of_results (run_query bktree query limit), Json_type.Int 200 (* OK *)
+      let query = Query.of_string preprocess args#searchTerm in
+      let startAt =
+        match args#startAt with
+          | None -> 0
+          | Some str -> int_of_string str in
+      let endAt =
+        match args#endAt with
+          | None -> max_int
+          | Some str -> int_of_string str in
+      let results = run_query bktree query startAt endAt in
+      match args#encoding with
+        | "xml" -> xml_response results
+        | "json" -> json_response results
     with
-      | Json_type.Json_error _ | Failure _ | Query.Parse_error -> Json_type.Null, Json_type.Int 400 (* Bad request *)
-      | _ -> Json_type.Null, Json_type.Int 500 (* Internal server error *) in
-  let output =
-    Json_io.string_of_json ~compact:true
-      (Json_type.Object
-        [ ("code",code)
-        ; ("json",response) ]) in
-  flush_line output
+      | Json_type.Json_error _ | Failure _ | Query.Parse_error ->
+          Json_type.Object [("code",Json_type.Int 400)] (* Bad request *)
+      | _ ->
+          Json_type.Object [("code",Json_type.Int 500)] in (* Internal server error *)
+  flush_line (Json_io.string_of_json ~compact:true response)
 
 let handle_queries () =
   let bktree = (load_index ()).bktree in

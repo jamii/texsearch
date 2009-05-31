@@ -28,19 +28,21 @@ ignoreSet = frozenset([
 ,'rm'
 ,'par'])
 
-# Transform a PlasTeX DOM into a LaTeX string
-def dump(node):
+def cleanup(node):
   # Short circuit text nodes
   if node.nodeType == Node.TEXT_NODE:
-    return "{%s}" % unicode(node)
+    return [unicode(node)]
   elif node.nodeName in ignoreSet:
     # Ignore node and move on to children
-    return " ".join([ dump(child) for child in node.childNodes ])
+    return cleanupChildren(node)
   else:
+    return [{ node.nodeName : cleanupChildren(node) }]
+
+def cleanupChildren(node):
     """ Rendering method for all non-text nodes """
     children = []
 
-    # See if we have any attributes to dump
+    # See if we have any attributes to cleanup
     if node.hasAttributes():
       for key, value in node.attributes.items():
         # If the key is 'self' these nodes are the same as the child nodes
@@ -48,28 +50,27 @@ def dump(node):
         if key == 'self' or key == '*modifier*':
           continue
         if value.__class__ is TeXFragment:
-          children.append(dump(value))
+          for child in value.childNodes:
+            children.extend(cleanup(child))
         else:
           children.append(unicode(value))
 
     # Dump child nodes
     for child in node.childNodes:
-      children.append(dump(child))
+      children.extend(cleanup(child))
 
-    node.nodeName + " ".join["{%s}" % child for child in children])
+    return children
 
 from plasTeX.TeX import TeX
-
-class PreprocessorError(Exception):
-  pass
 
 def preprocess(string):
   # Instantiate a TeX processor and parse the input text
   tex = TeX()
   tex.disableLogging()
   tex.input(string)
-  return dump(tex.parse())
+  return cleanup(tex.parse())
 
+import sys
 import simplejson as json
 
 def requests():
@@ -79,7 +80,6 @@ def requests():
     line = sys.stdin.readline()
 
 def main():
-  headers = {"Content-type": "text/plain"}
   for request in requests():
     try:
       query = request['query']
@@ -91,7 +91,7 @@ def main():
     except Exception, e:
       response = 'Error: ' + str(e)
       code = 500 # Internal server error
-    sys.stdout.write("%s\n" % json.dumps({'code':code, 'headers': headers, 'body':response}))
+    sys.stdout.write("%s\n" % json.dumps({'code':code, 'json':response}))
     sys.stdout.flush()
 
 if __name__ == "__main__":

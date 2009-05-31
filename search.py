@@ -6,8 +6,6 @@ from preprocessor import preprocess
 import re
 from util import expectResponse, decodeDoi
 
-headers = {"Content-type": "application/json"}
-
 def search(query):
   conn = httplib.HTTPConnection("localhost:5984")
 

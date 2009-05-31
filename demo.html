@@ -1,5 +1,5 @@
 <body id="body">
-  <textarea id="latex">$$\dot{V}O_2$$</textarea>
+  <textarea id="latex">"\dot" AND "O_2" AND ("C" OR "V")</textarea>
   <div><button onclick="javascript:search()">Search</button></div>
 
   <div>Results:</div>
@@ -16,7 +16,7 @@
 
   function search()
   {
-    var url = "/documents/_external/search?limit=" + limit + "&latex=" + escape(latex.value);
+    var url = "/documents/_external/search?encoding=json&searchTerm=" + escape(latex.value);
 
     searchRequest = new XMLHttpRequest();
     searchRequest.onreadystatechange = searchCallback;
