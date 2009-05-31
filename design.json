@@ -1,1 +1,0 @@
-{"_id":"_design/search","language":"javascript","views":{"results":{"map":"function(doc) {\n  for (eqn in doc.source) {\n    emit([doc._id,eqn[0]], eqn[1]);\n  }\n}"}}}

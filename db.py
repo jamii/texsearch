@@ -22,19 +22,6 @@ def initDB():
   conn.request("PUT", "/documents")
   expectResponse(conn,201)
 
-  print "Creating views"
-  # Setup views
-  revision = ""
-
-  try:
-    design = open('/opt/texsearch/design.json','r')
-    conn.request("PUT", "/documents/_design/search", design.read())
-    revision = json.loads(expectResponse(conn,201))['rev']
-    design.close()
-  except IOError:
-    print "Could not find the design document (design.json)"
-    sys.exit(1)
-
   print "Adding demo page"
   try:
     demo = open('/opt/texsearch/demo.html','r')
@@ -100,7 +87,7 @@ def delXml(fileName):
   postDocs(docs)
 
 def usage():
-  print "Usage: --init, --add docs.xml, --del docs.xml"
+  print "Usage: --init, --add=docs.xml, --del=docs.xml"
 
 import getopt
 
