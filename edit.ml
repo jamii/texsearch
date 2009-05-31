@@ -1,4 +1,3 @@
-open Util
 open Latex
 
 let rec minimum (x : int) y z =

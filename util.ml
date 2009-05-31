@@ -1,7 +1,3 @@
-let sum_float ls = List.fold_left (+.) 0. ls
-
-let sum_int ls = List.fold_left (+) 0 ls
-
 let minimum (l::ls) = List.fold_left min l ls
 
 let maximum (l::ls) = List.fold_left max l ls
