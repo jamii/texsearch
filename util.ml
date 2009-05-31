@@ -8,7 +8,13 @@ let filter_map f ls =
   List.map f ls)))
 
 let rec take k ls =
-  if k = 0 then [] else
+  if k <= 0 then [] else
   match ls with
     | [] -> []
     | (l::ls) -> l :: take (k-1) ls
+
+let rec drop k ls =
+  if k <= 0 then ls else
+  match ls with
+    | [] -> []
+    | (l::ls) -> drop (k-1) ls

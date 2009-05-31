@@ -1,3 +1,9 @@
+(*
+The internal representation of preprocessed latex strings.
+The string elements are hashed to save space and speed up comparisons.
+The json input is produced by the python preprocessor.
+*)
+
 type element =
   | Command of string
   | Text of string
