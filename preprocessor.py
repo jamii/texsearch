@@ -28,21 +28,19 @@ ignoreSet = frozenset([
 ,'rm'
 ,'par'])
 
-def clean(node,output):
+# Transform a PlasTeX DOM into a LaTeX string
+def dump(node):
   # Short circuit text nodes
   if node.nodeType == Node.TEXT_NODE:
-    text = re.sub("\s+", "", unicode(node))
-    if text:
-      output.append(text)
+    return "{%s}" % unicode(node)
   elif node.nodeName in ignoreSet:
     # Ignore node and move on to children
-    for child in node.childNodes:
-      clean(child,output)
+    return " ".join([ dump(child) for child in node.childNodes ])
   else:
     """ Rendering method for all non-text nodes """
     children = []
 
-    # See if we have any attributes to clean
+    # See if we have any attributes to dump
     if node.hasAttributes():
       for key, value in node.attributes.items():
         # If the key is 'self' these nodes are the same as the child nodes
@@ -50,16 +48,15 @@ def clean(node,output):
         if key == 'self' or key == '*modifier*':
           continue
         if value.__class__ is TeXFragment:
-          for child in value.childNodes:
-            clean(child,children)
+          children.append(dump(value))
         else:
           children.append(unicode(value))
 
-    # Invoke cleaning on child nodes
+    # Dump child nodes
     for child in node.childNodes:
-      clean(child,children)
+      children.append(dump(child))
 
-    output.append({node.nodeName : children})
+    node.nodeName + " ".join["{%s}" % child for child in children])
 
 from plasTeX.TeX import TeX
 
@@ -68,12 +65,34 @@ class PreprocessorError(Exception):
 
 def preprocess(string):
   # Instantiate a TeX processor and parse the input text
-  try:
-    tex = TeX()
-    tex.disableLogging()
-    tex.input(string)
-    result = []
-    clean(tex.parse(),result)
-    return result
-  except Exception:
-    raise PreprocessorError()
+  tex = TeX()
+  tex.disableLogging()
+  tex.input(string)
+  return dump(tex.parse())
+
+import simplejson as json
+
+def requests():
+  line = sys.stdin.readline()
+  while line:
+    yield json.loads(line)
+    line = sys.stdin.readline()
+
+def main():
+  headers = {"Content-type": "text/plain"}
+  for request in requests():
+    try:
+      query = request['query']
+      response = preprocess("\\begin{document}$$"+query['latex']+"$$\\end{document}")
+      code = 200 # OK
+    except KeyError, e:
+      response = 'Error: ' + str(e)
+      code = 400 # Bad request
+    except Exception, e:
+      response = 'Error: ' + str(e)
+      code = 500 # Internal server error
+    sys.stdout.write("%s\n" % json.dumps({'code':code, 'headers': headers, 'body':response}))
+    sys.stdout.flush()
+
+if __name__ == "__main__":
+    main()
