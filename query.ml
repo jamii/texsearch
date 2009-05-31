@@ -17,30 +17,49 @@ let rec length query =
     | Or (query1,query2) -> (length query1) + (length query2)
     | Not query -> length query
 
-(* A simple recursive descent parser *)
+open Str
 
-let lex = make_lexer ["AND";"OR";"NOT";"(";")"]
-
-let parse_query preprocess =
-  let rec parse_query_atom = parser
-    | [< 'String latex_string ; stream >] -> parse_query_compound (Latex (preprocess latex_string)) stream
-    | [< 'Kwd "NOT" ; query = parse_query_atom ; stream >] -> parse_query_compound (Not query) stream
-    | [< 'Kwd "(" ; query = parse_query_atom ; 'Kwd ")" ; stream >] -> parse_query_compound query stream
-
-  and parse_query_compound query1 = parser
-    | [< 'Kwd "AND" ; query2 = parse_query_atom >] -> And (query1,query2)
-    | [< 'Kwd "OR" ; query2 = parse_query_atom >] -> Or (query1,query2)
-    | [< >] -> query1 in
- parser
-  | [< query = parse_query_atom ; stream >] -> Stream.empty stream; query
+(* Quick and dirty lexer, tokens are: "latexstring" ) ( AND OR NOT *)
+let tokens = regexp "\"[^\"]*\"\|(\|)\|AND\|OR\|NOT"
+let lex str = full_split tokens str
 
 exception Parse_error
 
-let of_string preprocess str =
-  try
-    parse_query preprocess (lex (Stream.of_string str))
-  with Stream.Error _ | Stream.Failure | Parsing.Parse_error | Json_type.Json_error _ | Latex.Parse_error ->
-    raise Parse_error
+(* A simple recursive descent parser. Not the prettiest but yacc would be overkill *)
+let parse_query preprocess tokens =
+  let rec parse_atom tokens =
+    match tokens with
+      | Text _ :: rest -> parse_atom rest
+      | Delim "NOT" :: rest ->
+          let (query,rest) = parse_atom rest in
+          parse_compound (Not query) rest
+      | Delim "(" :: rest ->
+          let (query,rest) = parse_atom rest in
+          in match rest with
+            | Delim ")" :: rest -> parse_compound query rest
+      | Delim "AND" ::rest | Delim "OR" :: rest | Delim ")" :: rest -> raise Parse_error
+      | Delim latex_string :: rest ->
+          let latex = preprocess (String.sub latex_string 1 (String.length latex_string - 2)) in
+          parse_compound (Latex latex) rest
+      | _ -> raise Parse_error
+
+  and parse_compound query1 tokens =
+    match tokens with
+      | Text _ :: rest -> parse_compound query1 rest
+      | Delim "AND" :: rest ->
+          let (query2,rest) = parse_atom rest in
+          (And (query1,query2), rest)
+      | Delim "OR" :: rest ->
+          let (query2,rest) = parse_atom rest in
+          (Or (query1,query2), rest)
+      | Delim "(" :: rest | Delim ")" :: rest | Delim "NOT" :: rest -> raise Parse_error
+      | [] -> (query1,[])
+      | _ -> raise Parse_error in
+
+ match parse_atom tokens with
+  | (query,_) -> query
+
+let of_string preprocess str = parse_query preprocess (lex str)
 
 (* Extending the edit distance on latex strings to edit distance on compound queries *)
 
