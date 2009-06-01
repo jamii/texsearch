@@ -1,7 +1,7 @@
 #!/bin/env python
 
 import string, re
-from plasTeX import TeXFragment
+from plasTeX import TeXFragment, TeXDocument
 from plasTeX.DOM import Node
 
 # Ignore useless tags
@@ -20,18 +20,24 @@ ignoreSet = frozenset([
 ,'aligned'
 ,'gathered'
 ,'active::&'
-,'\\'
 ,'#document'
 ,'document'
 ,'left'
 ,'right'
 ,'rm'
-,'par'])
+,'par'
+,'None'
+,'mathord'
+])
 
 def cleanup(node):
   # Short circuit text nodes
   if node.nodeType == Node.TEXT_NODE:
-    return [unicode(node)]
+    text = unicode(node)
+    if (re.sub("\s+","",text) != "") & (not (text in ignoreSet)):
+      return [text]
+    else:
+      return []
   elif node.nodeName in ignoreSet:
     # Ignore node and move on to children
     return cleanupChildren(node)
@@ -49,11 +55,13 @@ def cleanupChildren(node):
         # If the key is '*modifier*' we dont care about it
         if key == 'self' or key == '*modifier*':
           continue
-        if value.__class__ is TeXFragment:
+        elif value.__class__ is TeXFragment:
           for child in value.childNodes:
             children.extend(cleanup(child))
+        elif value.__class__ is Node:
+          children.extend(cleanup(value))
         else:
-          children.append(unicode(value))
+          continue # Log this - not sure what arguments fall in this category
 
     # Dump child nodes
     for child in node.childNodes:
@@ -83,7 +91,7 @@ def main():
   for request in requests():
     try:
       query = request['query']
-      response = preprocess("\\begin{document}$$"+query['latex']+"$$\\end{document}")
+      response = preprocess(query['latex'])
       code = 200 # OK
     except KeyError, e:
       response = 'Error: ' + str(e)

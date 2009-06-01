@@ -52,7 +52,7 @@ def addXml(fileName):
       for i in xrange(1,len(item.childNodes)):
         latex = item.childNodes[i].childNodes[0].wholeText
         source[str(i)] = latex
-        content[str(i)] = preprocess("\\begin{document}"+latex+"\\end{document}")
+        content[str(i)] = preprocess(latex)
       doc = {'_id': encodeDoi(doi), 'source': source, 'content': content}
       docs.append(doc)
 
