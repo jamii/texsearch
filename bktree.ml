@@ -1,14 +1,12 @@
 (*
 The data structure used for the index is a modified bktree.
 Each tree node contains a single document and its associated latex strings.
-The children of the node are stored according to their distance from the node.
+The children of the node are stored according to their distance (index_dist) from the node.
 
 The left_edit_distance satisfies the triangle inequality: for any a,b,c
   left_edit_dist a c <= left_edit_dist a b + left_edit_dist b c
 From this we can derive:
-  min_i (Query.distance query b_i) >= min_j (Query.distance query c_j) - max_j min_i (left_edit_dist b_i c_j)
-Alternatively:
-  min_i (Query.distance query b_i) >= max_j (Query.distance query c_j) - min_j min_i (left_edit_dist b_i c_j)
+  min_j (query_dist query b_j) >= min_i (query_dist query c_i) - min_i max_j (left_edit_dist b_j c_i)
 Where i and j range over all the equations in the documents b and c
 This is the crucial fact that allows efficient searching within the tree.
 *)
@@ -25,23 +23,41 @@ let node_of doi equations =
     { doi = doi
     ; equations = equations }
 
+(* Extending the edit distance on latex strings to edit distance on compound queries *)
+
+open Query
+
+let rec query_dist query latex =
+  match query with
+    | Latex query_latex -> Edit.left_edit_distance query_latex latex
+    | And (query1,query2) -> max (query_dist query1 latex) (query_dist query2 latex)
+    | Or (query1,query2) -> min (query_dist query1 latex) (query_dist query2 latex)
+    | Not query -> query_dist_not query latex
+
+and query_dist_not query latex =
+  match query with
+    | Latex query_latex -> (Array.length query_latex) - (Edit.left_edit_distance query_latex latex)
+    | And (query1,query2) -> min (query_dist_not query1 latex) (query_dist_not query2 latex)
+    | Or (query1,query2) -> max (query_dist_not query1 latex) (query_dist_not query2 latex)
+    | Not query -> query_dist query latex
+
 (* Return each equation whose distance to the query is less than the cutoff, as well as the min/max distance *)
 let query_against query equations cutoff =
   List.fold_left
-    (fun (min_dist,max_dist,matches) (id,latex) ->
-      let dist = Query.distance query latex in
-      if dist < cutoff then (min dist min_dist, max dist max_dist, id :: matches) else (min_dist, max_dist, matches))
-    (max_int,0,[])
+    (fun (min_dist,matches) (id,latex) ->
+      let dist = query_dist query latex in
+      if dist < cutoff then (min dist min_dist, id :: matches) else (min dist min_dist, matches))
+    (max_int,[])
     equations
 
-(* Minimum distance between any equation in the left list and any in the right list
-   ie. min_j min_i (left_edit_dist b_i c_j) *)
+(* index_dist b c = min_i max_j (left_edit_dist b_j c_i)
+   the right half of the bounding equation at the top of the page *)
 let index_dist bl cl =
-  Util.minimum (List.map (fun (_,b) ->
-    Util.minimum (List.map (fun (_,c) ->
+  Util.minimum (List.map (fun (_,c) ->
+    Util.maximum (List.map (fun (_,b) ->
       Edit.left_edit_distance b c)
-    cl))
-  bl)
+    bl))
+  cl)
 
 module IntMap = Map.Make (struct
   type t = int
@@ -105,16 +121,18 @@ type search =
   ; mutable safe_results : int
   ; mutable min_dist : int }
 
-(* Query a document node, update the search structure, return the min/max distance from the query *)
+exception Broken
+
+(* Query a document node, update the search structure, return the min distance from the query *)
 let query_node search node node_deleted =
-  let (min_dist,max_dist,matches) = query_against search.query node.equations search.cutoff in
-  if min_dist < search.cutoff && not node_deleted
-  then search.results.(min_dist) <- (node.doi,matches) :: search.results.(min_dist)
+  let (dist,matches) = query_against search.query node.equations search.cutoff in
+  if dist < search.cutoff && not node_deleted
+  then search.results.(dist) <- (node.doi,matches) :: search.results.(dist)
   else ();
-  if min_dist < search.min_dist
-  then search.safe_results <- search.safe_results + 1
+  if dist < search.min_dist
+  then (*search.safe_results <- search.safe_results + 1*) raise Broken
   else ();
-  (min_dist,max_dist)
+  dist
 
 (* Push a tree node onto the search queue *)
 let push_search_node search node d =
@@ -138,7 +156,7 @@ let rec pop_search_node search =
 (* The initial search structure *)
 let new_search query bktree =
   (* The choice of cutoff is completely arbitrary *)
-  let cutoff = 1 + (Query.length query / 3)  in
+  let cutoff = 1 + (Query.max_length query / 3)  in
   let search =
     { query = query
     ; cutoff = cutoff
@@ -146,7 +164,7 @@ let new_search query bktree =
     ; results = Array.make cutoff []
     ; safe_results = 0
     ; min_dist = 0 } in
-  IntMap.iter (fun i node -> push_search_node search node (Query.length query - i)) bktree.children;
+  push_search_node search bktree 0;
   search
 
 (* Runs search until at least k results can be returned *)
@@ -172,11 +190,11 @@ let run_search k search =
             Util.take k !results
         (* Search in bktree *)
         | Some bktree ->
-            let (min_dist,max_dist) = query_node search bktree.root bktree.root_deleted in
+            let dist = query_node search bktree.root bktree.root_deleted in
             IntMap.iter
               (fun i node ->
                 (* d is a lower bound for the distance to node, based on the triangle inequality *)
-                let d = min search.min_dist (max (max_dist-i) 0) in
+                let d = max search.min_dist (dist-i) in
                 push_search_node search node d)
               bktree.children;
             loop () in
