@@ -16,7 +16,7 @@
 
   function search()
   {
-    var url = "/documents/_external/search?encoding=json&searchTerm=" + escape(latex.value);
+    var url = "/documents/_external/index?format=json&searchTerm=" + escape(latex.value);
 
     searchRequest = new XMLHttpRequest();
     searchRequest.onreadystatechange = searchCallback;
