@@ -12,7 +12,7 @@ let rec minimum (x : int) y z =
 (* Number of edits required to match latexL to a substring of latexR *)
 let left_edit_distance (latexL : Latex.t) (latexR : Latex.t) =
   let maxl, maxr = Array.length latexL, Array.length latexR in
-  if maxl = 0 then maxr else
+  if maxl = 0 then 0 else
   if maxr = 0 then maxl else
   (* cache.(i).(j) is the left_edit_distance between latexL[i-maxl] and latexR[j-maxr] *)
   let cache = Array.make_matrix (maxl + 1) (maxr + 1) 0 in
