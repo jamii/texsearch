@@ -4,6 +4,9 @@ This mostly consists of I/O and error handling.
 *)
 
 module Http = Http_client.Convenience
+let encode url = Netencoding.Url.encode ~plus:false url
+
+let decodeDoi doi = Str.global_replace (Str.regexp "_") "/" doi
 
 let flush_line str = print_string str; print_string "\n"; flush stdout
 
@@ -22,7 +25,7 @@ and request =
     < searchTerm : string
     ; ?startAt : string option
     ; ?endAt : string option
-    ; ?encoding : string = "xml" > >
+    ; ?format : string = "xml" > >
 
 and update =
   < id : doi
@@ -73,10 +76,10 @@ let get_document doi =
 
 let get_result (doi,ids) =
   let source = (get_document doi)#source in
-  (doi, List.map (fun id -> List.assoc id source) ids)
+  (decodeDoi doi, List.map (fun id -> List.assoc id source) ids)
 
 let preprocess latex_string =
-  let url = db_url ^ "_external/preprocess?latex=" ^ latex_string in
+  let url = db_url ^ "_external/preprocess?latex=" ^ (encode latex_string) in
   let latex_json = Http.http_get url in
   Latex.of_json (Json_io.json_of_string latex_json)
 
@@ -96,7 +99,7 @@ let xml_of_results results =
   let xml_of_source source =
     Xml.Element ("Equation", [], [Xml.PCData source]) in
   let xml_of_result (doi,sources) =
-    Xml.Element ("Result", [], (List.map xml_of_source sources)) in
+    Xml.Element ("Result", [("doi", decodeDoi doi)], (List.map xml_of_source sources)) in
   Xml.to_string (Xml.Element ("Results", [], (List.map xml_of_result results)))
 
 let xml_response results =
@@ -112,7 +115,7 @@ let run_query bktree query startAt endAt =
 
 let handle_query bktree str =
   let response =
-    try
+    (*try*)
       let args = (request_of_json (Json_io.json_of_string str))#args in
       let query = Query.of_string preprocess args#searchTerm in
       let startAt =
@@ -124,14 +127,14 @@ let handle_query bktree str =
           | None -> max_int
           | Some str -> int_of_string str in
       let results = run_query bktree query startAt endAt in
-      match args#encoding with
+      match args#format with
         | "xml" -> xml_response results
-        | "json" -> json_response results
-    with
+        | "json" -> json_response results in
+(*    with
       | Json_type.Json_error _ | Failure _ | Query.Parse_error ->
           Json_type.Object [("code",Json_type.Int 400)] (* Bad request *)
       | _ ->
-          Json_type.Object [("code",Json_type.Int 500)] in (* Internal server error *)
+          Json_type.Object [("code",Json_type.Int 500)] in (* Internal server error *)*)
   flush_line (Json_io.string_of_json ~compact:true response)
 
 let handle_queries () =
