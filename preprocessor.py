@@ -92,22 +92,27 @@ class XmlRenderer:
 
 class PlainRenderer:
   def __init__(self):
-    self.text = ""# fix bracketing !!!
+    self.text = ""
+    self.macros = 0
 
   def dumps(self):
     return self.text
 
   def addText(self,text):
-    self.text += "{%s} " % text
+    if self.macros >= 1:
+      self.text += "{%s} " % text
+    else:
+      self.text += "%s " % text
 
   def pushMacro(self,macro):
     if macro.startswith("active::"):
       self.text += "%s " % macro.lstrip("active::")
     else:
       self.text += "\\%s " % macro
+    self.macros += 1
 
   def popMacro(self,macro):
-    pass
+    self.macros -= 1
 
 def render(node,renderer):
   if node.nodeType == Node.TEXT_NODE:
