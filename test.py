@@ -4,7 +4,7 @@ from xml.dom import minidom
 import simplejson as json
 from util import expectResponse
 import random
-from preprocessor import preprocess
+from preprocessor import *
 
 # Bulk process a xml document
 def loadXml(fileName):
@@ -77,12 +77,15 @@ def testPreprocessor(docs,n,server):
     sources.extend(doc['source'])
   for source in random.sample(sources,n):
     try:
-      reference = json.dumps(preprocess("\\begin{document}"+source+"\\end{document}"))
+      tex = preprocess(source)
+      jsonRenderer = JsonRenderer()
+      render(tex,jsonRenderer)
+      reference = jsonRenderer.dumps()
       result1 = callPreprocessor(source,server)
       result2 = callPreprocessor(source,server)
       if (reference == result1) & (reference == result2):
-        print "Test succeeded"
         successes += 1
+        print "Test succeeded"
       else:
         failures += 1
         print "Test failed: inconsistent results"
@@ -96,6 +99,18 @@ def testPreprocessor(docs,n,server):
       print e
 
   print "Successes %d, failures %d, errors %d" % (successes,failures,errors)
+
+def previewPreprocessor(docs,n):
+  sources = []
+  for doc in docs:
+    sources.extend(doc['source'])
+  for source in random.sample(sources,n):
+    print source
+    tex = preprocess(source)
+    plainRenderer = PlainRenderer()
+    render(tex,plainRenderer)
+    print plainRenderer.dumps()
+    print
 
 import getopt
 
@@ -111,6 +126,7 @@ if __name__ == '__main__':
       n = int(arg)
     if opt == "--server":
       server = arg
-  testIndex(docs,n,server)
+  #testIndex(docs,n,server)
   #testPreprocessor(docs,n,server)
+  previewPreprocessor(docs,n)
   print "Ok"
