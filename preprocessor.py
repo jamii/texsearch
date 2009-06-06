@@ -11,6 +11,7 @@ ignoreSet = frozenset([
 ,'math'
 ,'text'
 ,'nulldelimiterspace'
+,'kern'
 ,'vphantom'
 ,'hphantom'
 ,'hfill'
@@ -28,8 +29,7 @@ ignoreSet = frozenset([
 ,'par'
 ,'None'
 ,'mathord'
-,'ArrayRow'
-,'ArrayCell'
+,'array'
 ])
 
 class BadRender(Exception):
@@ -63,56 +63,38 @@ class JsonRenderer:
     except Exception:
       raise BadRender()
 
-class XmlRenderer:
-  def __init__(self):
-    self.text = ""
-    self.macros = []
+  def openBracket(self):
+    pass
 
-  def escape(self,text):
-    return text.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')
-
-  def dumps(self):
-    return ("<equation>%s<equation/>" % self.text)
-
-  def addText(self,text):
-    self.text += self.escape(text) + " "
-
-  def pushMacro(self,macro):
-    self.text += "<%s> " % (self.escape(macro))
-    self.macros.append(macro)
-
-  def popMacro(self,macro):
-    try:
-      currentMacro = self.macros.pop()
-      if currentMacro != macro:
-        raise BadRender()
-      self.text += "</%s> " % (self.escape(macro))
-    except Exception:
-      raise BadRender()
+  def closeBracket(self):
+    pass
 
 class PlainRenderer:
   def __init__(self):
-    self.text = ""
+    self.text = []
     self.macros = 0
 
   def dumps(self):
-    return self.text
+    return " ".join(self.text)
 
   def addText(self,text):
-    if self.macros >= 1:
-      self.text += "{%s} " % text
-    else:
-      self.text += "%s " % text
+    self.text.append(text)
 
   def pushMacro(self,macro):
-    if macro.startswith("active::"):
-      self.text += "%s " % macro.lstrip("active::")
-    else:
-      self.text += "\\%s " % macro
     self.macros += 1
+    if macro.startswith("active::"):
+      self.text.append(macro.lstrip("active::"))
+    else:
+      self.text.append("\\" + macro)
 
   def popMacro(self,macro):
     self.macros -= 1
+
+  def openBracket(self):
+    self.text.append("{")
+
+  def closeBracket(self):
+    self.text.append("}")
 
 def render(node,renderer):
   if node.nodeType == Node.TEXT_NODE:
@@ -122,13 +104,13 @@ def render(node,renderer):
       renderer.addText(text)
   elif node.nodeName in ignoreSet:
     # Ignore node and move on to children
-    renderChildren(node,renderer)
+    renderChildren(node,renderer,False)
   else:
     renderer.pushMacro(node.nodeName)
-    renderChildren(node,renderer)
+    renderChildren(node,renderer,True)
     renderer.popMacro(node.nodeName)
 
-def renderChildren(node,renderer):
+def renderChildren(node,renderer,brackets):
     # See if we have any attributes to render
     if node.hasAttributes():
       for key, value in node.attributes.items():
@@ -137,16 +119,28 @@ def renderChildren(node,renderer):
         if key == 'self' or key == '*modifier*':
           continue
         elif value.__class__ is TeXFragment:
+          if brackets:
+            renderer.openBracket()
           for child in value.childNodes:
             render(child,renderer)
+          if brackets:
+            renderer.closeBracket()
         elif value.__class__ is Node:
+          if brackets:
+            renderer.openBracket()
           render(value,renderer)
+          if brackets:
+            renderer.closeBracket()
         else:
           continue # Log this - not sure what arguments fall in this category
 
     # Render child nodes
+    if brackets:
+      renderer.openBracket()
     for child in node.childNodes:
       render(child,renderer)
+    if brackets:
+      renderer.closeBracket()
 
 from plasTeX.TeX import TeX
 
@@ -170,7 +164,7 @@ def main():
   for request in requests():
     try:
       query = request['query']
-      result = preprocess(query['latex'])
+      result = preprocess("$$" + query['latex'] + "$$")
       format = query['format']
       if format == 'json-plain':
         jsonRenderer = JsonRenderer()
