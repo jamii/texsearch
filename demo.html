@@ -31,7 +31,12 @@
 
         body.removeChild(results);
         results = document.createElement('div');
-        response.forEach(function (row) {
+
+        var p = document.createElement('p');
+        p.textContent = response.query;
+        results.appendChild(p)
+
+        response.results.forEach(function (row) {
           var a = document.createElement('a');
           a.textContent = row[0];
           a.href = "http://www.springerlink.com/content?k=doi%3a(" + row[0] + ")";

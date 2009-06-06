@@ -4,7 +4,7 @@ open Genlex
 
 (* The query type *)
 type t =
-  | Latex of Latex.t
+  | Latex of Latex.t * string (* Store the string version so we can send the query back to the users *)
   | And of t * t
   | Or of t * t
   | Not of t
@@ -12,7 +12,7 @@ type t =
 (* Longest latex string in query *)
 let rec max_length query =
   match query with
-    | Latex latex -> Array.length latex
+    | Latex (latex,_) -> Array.length latex
     | And (query1,query2) -> max (max_length query1) (max_length query2)
     | Or (query1,query2) -> max (max_length query1) (max_length query2)
     | Not query -> max_length query
@@ -44,8 +44,8 @@ let parse_query preprocess tokens =
             | _ -> raise Parse_error)
       | Delim "AND" :: rest | Delim "OR" :: rest | Delim ")" :: rest -> raise Parse_error
       | Delim latex_string :: rest ->
-          let latex = preprocess (String.sub latex_string 1 (String.length latex_string - 2)) in
-          parse_compound (Latex latex) rest
+          let (latex,plain) = preprocess (String.sub latex_string 1 (String.length latex_string - 2)) in
+          parse_compound (Latex (latex,plain)) rest
       | _ -> raise Parse_error
 
   and parse_compound query1 tokens =
@@ -65,3 +65,10 @@ let parse_query preprocess tokens =
   | (query,_) -> query
 
 let of_string preprocess str = parse_query preprocess (lex str)
+
+let rec to_string query =
+  match query with
+    | Latex (_,plain) -> plain
+    | And (query1,query2) -> "(" ^ (to_string query1) ^ " AND " ^ (to_string query2) ^ ")"
+    | Or (query1,query2) -> "(" ^ (to_string query1) ^ " OR " ^ (to_string query2) ^ ")"
+    | Not query -> "(NOT " ^ (to_string query) ^ ")"

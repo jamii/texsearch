@@ -1,7 +1,7 @@
 #!/bin/env python
 import sys, httplib, urllib
 from xml.dom import minidom
-from preprocessor import preprocess
+from preprocessor import preprocess, render, JsonRenderer
 import simplejson as json
 from util import expectResponse, encodeDoi
 
@@ -52,7 +52,9 @@ def addXml(fileName):
       for i in xrange(1,len(item.childNodes)):
         latex = item.childNodes[i].childNodes[0].wholeText
         source[str(i)] = latex
-        content[str(i)] = preprocess(latex)
+        renderer = JsonRenderer()
+        render(preprocess(latex),renderer)
+        content[str(i)] = renderer.dumps()
       doc = {'_id': encodeDoi(doi), 'source': source, 'content': content}
       docs.append(doc)
 

@@ -36,9 +36,13 @@ and update =
 and updates =
   < rows : update list >
 
-and result = doi * (string list)
+and result = doi * ((string * int) list)
 
 and results = result list
+
+and preprocessed =
+  < json : Latex.t
+  ; plain : string >
 
 type index =
   { last_update : int
@@ -76,12 +80,12 @@ let get_document doi =
 
 let get_result (doi,ids) =
   let source = (get_document doi)#source in
-  (decodeDoi doi, List.map (fun id -> List.assoc id source) ids)
+  (decodeDoi doi, List.map (fun (id,weight) -> (List.assoc id source,weight)) ids)
 
 let preprocess latex_string =
-  let url = db_url ^ "_external/preprocess?latex=" ^ (encode latex_string) in
-  let latex_json = Http.http_get url in
-  Latex.of_json (Json_io.json_of_string latex_json)
+  let url = db_url ^ "_external/preprocess?format=json-plain&latex=" ^ (encode latex_string) in
+  let preprocessed = preprocessed_of_json (Json_io.json_of_string (Http.http_get url)) in
+  (preprocessed#json,preprocessed#plain)
 
 (* Responses to couchdb *)
 
@@ -90,23 +94,25 @@ type response =
   | BadRequest
   | InternalServerError
 
-let json_response results =
+let json_response results query_string =
   Json_type.Object
     [ ("code",Json_type.Int 200)
-    ; ("json",json_of_results results) ]
+    ; ("json",Json_type.Object
+        [ ("query",Json_type.String query_string)
+        ; ("results",json_of_results results) ]) ]
 
-let xml_of_results results =
-  let xml_of_source source =
-    Xml.Element ("Equation", [], [Xml.PCData source]) in
-  let xml_of_result (doi,sources) =
-    Xml.Element ("Result", [("doi", decodeDoi doi)], (List.map xml_of_source sources)) in
-  Xml.to_string (Xml.Element ("Results", [], (List.map xml_of_result results)))
+let xml_of_results results query_string =
+  let xml_of_eqn (source,weight) =
+    Xml.Element ("equation", [("weight",string_of_int weight)], [Xml.PCData source]) in
+  let xml_of_result (doi,eqns) =
+    Xml.Element ("result", [("doi", decodeDoi doi)], (List.map xml_of_eqn eqns)) in
+  Xml.to_string (Xml.Element ("results", [("query",query_string)], (List.map xml_of_result results)))
 
-let xml_response results =
+let xml_response results query_string =
   Json_type.Object
     [ ("code",Json_type.Int 200)
     ; ("headers",Json_type.Object [("Content-type",Json_type.String "text/xml")])
-    ; ("body",Json_type.String (xml_of_results results)) ]
+    ; ("body",Json_type.String (xml_of_results results query_string)) ]
 
 (* Queries *)
 
@@ -121,15 +127,15 @@ let handle_query bktree str =
       let startAt =
         match args#startAt with
           | None -> 0
-          | Some str -> int_of_string str in
+          | Some str -> (int_of_string str - 1) in
       let endAt =
         match args#endAt with
           | None -> max_int
           | Some str -> int_of_string str in
       let results = run_query bktree query startAt endAt in
       match args#format with
-        | "xml" -> xml_response results
-        | "json" -> json_response results in
+        | "xml" -> xml_response results (Query.to_string query)
+        | "json" -> json_response results (Query.to_string query) in
 (*    with
       | Json_type.Json_error _ | Failure _ | Query.Parse_error ->
           Json_type.Object [("code",Json_type.Int 400)] (* Bad request *)
@@ -211,7 +217,7 @@ let init_index () =
 (* Main *)
 
 open Arg
-  let _ = parse
+let _ = parse
   [("-init", Unit init_index, ": Create an empty index")
   ;("-update", Unit run_updates, ": Update the index")
   ;("-query", Unit handle_queries, ": Handle index queries as a couchdb _external")]

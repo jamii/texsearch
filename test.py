@@ -33,7 +33,7 @@ def testIndex(docs,n,server):
     searchTerm = random.choice(searchDoc['source'])
     try:
       conn = httplib.HTTPConnection(server)
-      conn.request("GET", "/documents/_external/index?searchTerm=\"%s\"" % urllib.quote(searchTerm.replace("\n","")))
+      conn.request("GET", "/documents/_external/index?format=xml&searchTerm=\"%s\"" % urllib.quote(searchTerm.replace("\n","")))
       result = expectResponse(conn,200)
       xml = minidom.parseString(result)
       results = xml.childNodes[0]

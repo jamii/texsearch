@@ -29,14 +29,14 @@ open Query
 
 let rec query_dist query latex =
   match query with
-    | Latex query_latex -> Edit.left_edit_distance query_latex latex
+    | Latex (query_latex,_) -> Edit.left_edit_distance query_latex latex
     | And (query1,query2) -> max (query_dist query1 latex) (query_dist query2 latex)
     | Or (query1,query2) -> min (query_dist query1 latex) (query_dist query2 latex)
     | Not query -> query_dist_not query latex
 
 and query_dist_not query latex =
   match query with
-    | Latex query_latex -> (Array.length query_latex) - (Edit.left_edit_distance query_latex latex)
+    | Latex (query_latex,_) -> (Array.length query_latex) - (Edit.left_edit_distance query_latex latex)
     | And (query1,query2) -> min (query_dist_not query1 latex) (query_dist_not query2 latex)
     | Or (query1,query2) -> max (query_dist_not query1 latex) (query_dist_not query2 latex)
     | Not query -> query_dist query latex
@@ -46,7 +46,7 @@ let query_against query equations cutoff =
   List.fold_left
     (fun (min_dist,matches) (id,latex) ->
       let dist = query_dist query latex in
-      if dist < cutoff then (min dist min_dist, id :: matches) else (min dist min_dist, matches))
+      if dist < cutoff then (min dist min_dist, (id,dist) :: matches) else (min dist min_dist, matches))
     (max_int,[])
     equations
 
@@ -93,7 +93,7 @@ let rec delete doi bktree =
   if bktree.root.doi = doi then bktree.root_deleted <- true else ();
   IntMap.iter (fun _ child -> delete doi child) bktree.children
 
-type result = doi * (id list)
+type result = doi * ((id * int) list)
 
 (*
 The search structure tracks the progress of a search through a tree.
