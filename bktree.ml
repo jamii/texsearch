@@ -156,7 +156,7 @@ let rec pop_search_node search =
 (* The initial search structure *)
 let new_search query bktree =
   (* The choice of cutoff is completely arbitrary *)
-  let cutoff = 1 + (Query.max_length query / 3)  in
+  let cutoff = 1 + (min 10 (Query.max_length query / 2))  in
   let search =
     { query = query
     ; cutoff = cutoff
