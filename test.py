@@ -30,7 +30,7 @@ def testIndex(docs,n,server):
   for i in xrange(0,n):
     searchDoc = random.choice(docs)
     searchDoi = searchDoc['doi']
-    searchTerm = random.choice(searchDoc['source'])
+    searchTerm = random.choice(searchDoc['source']).strip("\n").strip(" ").strip("$")
     try:
       conn = httplib.HTTPConnection(server)
       conn.request("GET", "/documents/_external/index?format=xml&searchTerm=\"%s\"" % urllib.quote(searchTerm.replace("\n","")))
@@ -77,7 +77,7 @@ def testPreprocessor(docs,n,server):
     sources.extend(doc['source'])
   for source in random.sample(sources,n):
     try:
-      tex = preprocess(source)
+      tex = preprocess(source.strip("$"))
       jsonRenderer = JsonRenderer()
       render(tex,jsonRenderer)
       reference = jsonRenderer.dumps()
@@ -126,7 +126,7 @@ if __name__ == '__main__':
       n = int(arg)
     if opt == "--server":
       server = arg
-  #testIndex(docs,n,server)
+  testIndex(docs,n,server)
   #testPreprocessor(docs,n,server)
-  previewPreprocessor(docs,n)
+  #previewPreprocessor(docs,n)
   print "Ok"
