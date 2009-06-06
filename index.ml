@@ -103,7 +103,7 @@ let json_response results query_string =
 
 let xml_of_results results query_string =
   let xml_of_eqn (source,weight) =
-    Xml.Element ("equation", [("weight",string_of_int weight)], [Xml.PCData source]) in
+    Xml.Element ("equation", [("distance",string_of_int weight)], [Xml.PCData source]) in
   let xml_of_result (doi,eqns) =
     Xml.Element ("result", [("doi", decodeDoi doi)], (List.map xml_of_eqn eqns)) in
   Xml.to_string (Xml.Element ("results", [("query",query_string)], (List.map xml_of_result results)))
