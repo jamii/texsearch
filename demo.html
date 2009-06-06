@@ -1,6 +1,7 @@
 <body id="body">
   <textarea id="latex">"\dot" AND "O_2" AND ("C" OR "V")</textarea>
-  <div><button onclick="javascript:search()">Search</button></div>
+  <div><button onclick="javascript:searchJson()">Search (json)</button></div>
+  <div><button onclick="javascript:searchXml()">Search (xml)</button></div>
 
   <div>Results:</div>
   <div id="results"></div>
@@ -14,17 +15,17 @@
   var results = document.getElementById("results");
   var limit = 10;
 
-  function search()
+  function searchJson()
   {
     var url = "/documents/_external/index?format=json&searchTerm=" + escape(latex.value);
 
     searchRequest = new XMLHttpRequest();
-    searchRequest.onreadystatechange = searchCallback;
+    searchRequest.onreadystatechange = searchJsonCallback;
     searchRequest.open("GET",url);
     searchRequest.send( null );
   }
 
-  function searchCallback()
+  function searchJsonCallback()
     {
       if (searchRequest.readyState == 4 && searchRequest.status == 200) {
         response = eval("(" + searchRequest.responseText + ")"); /* Yes, this is a bad thing to do */
@@ -49,6 +50,26 @@
           })
         })
         body.appendChild(results);
+
+      } else if (searchRequest.readyState == 4 && searchRequest.status != 200) {
+        results.textContent = "Error " + searchRequest.status + " : " + searchRequest.responseText
+      }
+    }
+
+  function searchXml()
+  {
+    var url = "/documents/_external/index?format=xml&searchTerm=" + escape(latex.value);
+
+    searchRequest = new XMLHttpRequest();
+    searchRequest.onreadystatechange = searchXmlCallback;
+    searchRequest.open("GET",url);
+    searchRequest.send( null );
+  }
+
+  function searchXmlCallback()
+    {
+      if (searchRequest.readyState == 4 && searchRequest.status == 200) {
+        results.textContent = searchRequest.responseText
 
       } else if (searchRequest.readyState == 4 && searchRequest.status != 200) {
         results.textContent = "Error " + searchRequest.status + " : " + searchRequest.responseText
