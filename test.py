@@ -37,8 +37,8 @@ def testIndex(docs,n,server):
       result = expectResponse(conn,200)
       xml = minidom.parseString(result)
       results = xml.childNodes[0]
-      if results.childNodes:
-        topResult = results.childNodes[0]
+      if len(results.childNodes) > 1:
+        topResult = results.childNodes[1]
         doi = topResult.attributes['doi'].childNodes[0].wholeText
         if doi == searchDoi:
           print "Test %d: success (%d results)" % (i, len(results.childNodes))
@@ -77,7 +77,7 @@ def testPreprocessor(docs,n,server):
     sources.extend(doc['source'])
   for source in random.sample(sources,n):
     try:
-      tex = preprocess(source.strip("$"))
+      tex = preprocess("\\begin{document}" + latex + "\\end{document}")
       jsonRenderer = JsonRenderer()
       render(tex,jsonRenderer)
       reference = jsonRenderer.dumps()

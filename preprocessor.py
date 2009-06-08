@@ -148,7 +148,7 @@ def preprocess(string):
   # Instantiate a TeX processor and parse the input text
   tex = TeX()
   tex.disableLogging()
-  tex.input("\\begin{document}"+string+"\\end{document}")
+  tex.input(string)
   return tex.parse()
 
 import sys
@@ -164,7 +164,7 @@ def main():
   for request in requests():
     try:
       query = request['query']
-      result = preprocess("$$" + query['latex'] + "$$")
+      result = preprocess("\\begin{document} $$ " + query['latex'] + " $$ \\end{document}")
       format = query['format']
       if format == 'json-plain':
         jsonRenderer = JsonRenderer()

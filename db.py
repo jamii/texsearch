@@ -53,7 +53,7 @@ def addXml(fileName):
         latex = item.childNodes[i].childNodes[0].wholeText
         source[str(i)] = latex
         renderer = JsonRenderer()
-        render(preprocess(latex),renderer)
+        render(preprocess("\\begin{document}" + latex + "\\end{document}"),renderer)
         content[str(i)] = renderer.dumps()
       doc = {'_id': encodeDoi(doi), 'source': source, 'content': content}
       docs.append(doc)
