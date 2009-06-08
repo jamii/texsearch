@@ -106,7 +106,9 @@ let xml_of_results results query_string =
     Xml.Element ("equation", [("distance",string_of_int weight)], [Xml.PCData source]) in
   let xml_of_result (doi,eqns) =
     Xml.Element ("result", [("doi", decodeDoi doi)], (List.map xml_of_eqn eqns)) in
-  Xml.to_string (Xml.Element ("results", [("query",query_string)], (List.map xml_of_result results)))
+  let xml_of_query_string =
+    Xml.Element ("query",[],[Xml.PCData query_string]) in
+  Xml.to_string (Xml.Element ("results", [], xml_of_query_string :: (List.map xml_of_result results)))
 
 let xml_response results query_string =
   Json_type.Object

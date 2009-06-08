@@ -68,7 +68,7 @@ let of_string preprocess str = parse_query preprocess (lex str)
 
 let rec to_string query =
   match query with
-    | Latex (_,plain) -> plain
+    | Latex (_,plain) -> "\"" ^ plain ^ "\""
     | And (query1,query2) -> "(" ^ (to_string query1) ^ " AND " ^ (to_string query2) ^ ")"
     | Or (query1,query2) -> "(" ^ (to_string query1) ^ " OR " ^ (to_string query2) ^ ")"
     | Not query -> "(NOT " ^ (to_string query) ^ ")"

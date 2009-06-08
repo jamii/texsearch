@@ -55,10 +55,10 @@ def testIndex(docs,n,server):
         print searchTerm
     except Exception, e:
       errors += 1
-      print "Test %d: error" % i
-      #print searchDoi
-      #print searchTerm
-      print e
+      print "Test %d: %s" % (i,e)
+      print searchDoi
+      print searchTerm
+      print result
 
   print "Successes %d, empties %d, failures %d, errors %d" % (successes,empties,failures,errors)
 
