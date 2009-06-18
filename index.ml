@@ -23,7 +23,9 @@ and document =
 and request =
   < args "query" :
     < searchTerm : string
-    ; ?startAt : string option
+    ; ?searchTimeout : string = "10.0"
+    ; ?preprocessorTimeout : string = "5.0"
+    ; ?startAt : string = "0"
     ; ?endAt : string option
     ; ?format : string = "xml" > >
 
@@ -82,8 +84,8 @@ let get_result (doi,ids) =
   let source = (get_document doi)#source in
   (decodeDoi doi, List.map (fun (id,weight) -> (List.assoc id source,weight)) ids)
 
-let preprocess latex_string =
-  let url = db_url ^ "_external/preprocess?format=json-plain&latex=" ^ (encode latex_string) in
+let preprocess timeout latex_string =
+  let url = db_url ^ "_external/preprocess?format=json-plain&timeout=" ^ (encode (string_of_float timeout)) ^ "&latex=" ^ (encode latex_string) in
   let preprocessed = preprocessed_of_json (Json_io.json_of_string (Http.http_get url)) in
   (preprocessed#json,preprocessed#plain)
 
@@ -116,33 +118,53 @@ let xml_response results query_string =
     ; ("headers",Json_type.Object [("Content-type",Json_type.String "text/xml")])
     ; ("body",Json_type.String (xml_of_results results query_string)) ]
 
+(* Timeouts *)
+
+exception Timeout
+
+let set_timer tsecs = ignore (Unix.setitimer Unix.ITIMER_REAL { Unix.it_interval = 0.0; Unix.it_value = tsecs })
+
+let with_timeout tsecs f =
+  Sys.set_signal Sys.sigalrm (Sys.Signal_handle (fun _ -> raise Timeout));
+  try
+    set_timer tsecs;
+    let result = f () in
+    set_timer 0.0;
+    result
+  with exc ->
+    set_timer 0.0;
+    raise exc
+
 (* Queries *)
 
 let run_query bktree query startAt endAt =
-  List.map get_result (Util.drop startAt (Bktree.run_search endAt (Bktree.new_search query bktree)))
+  List.map get_result (Util.drop (startAt-1) (Bktree.run_search endAt (Bktree.new_search query bktree)))
 
 let handle_query bktree str =
   let response =
-    (*try*)
+    try
       let args = (request_of_json (Json_io.json_of_string str))#args in
-      let query = Query.of_string preprocess args#searchTerm in
-      let startAt =
-        match args#startAt with
-          | None -> 0
-          | Some str -> (int_of_string str - 1) in
-      let endAt =
+      let searchTimeout = float_of_string args#searchTimeout in
+      let preprocessorTimeout = float_of_string args#preprocessorTimeout in
+      let startAt = int_of_string args#startAt in
+      let endAt = 
         match args#endAt with
           | None -> max_int
           | Some str -> int_of_string str in
-      let results = run_query bktree query startAt endAt in
+      let query = Query.of_string (preprocess preprocessorTimeout) args#searchTerm in      
+      let results = with_timeout searchTimeout (fun _ -> run_query bktree query startAt endAt) in
       match args#format with
         | "xml" -> xml_response results (Query.to_string query)
-        | "json" -> json_response results (Query.to_string query) in
-(*    with
+        | "json" -> json_response results (Query.to_string query)
+    with
       | Json_type.Json_error _ | Failure _ | Query.Parse_error ->
           Json_type.Object [("code",Json_type.Int 400)] (* Bad request *)
+      | Timeout ->
+          Json_type.Object [("code",Json_type.Int 500) (* Internal server error *)
+                           ; ("headers",Json_type.Object [("Content-type",Json_type.String "text/plain")])
+                           ; ("body",Json_type.String "Error: Timed out") ]
       | _ ->
-          Json_type.Object [("code",Json_type.Int 500)] in (* Internal server error *)*)
+          Json_type.Object [("code",Json_type.Int 500)] (* Internal server error *) in
   flush_line (Json_io.string_of_json ~compact:true response)
 
 let handle_queries () =
