@@ -1,6 +1,6 @@
 (*
 Toplevel interaction with the search index.
-This mostly consists of I/O and error handling.
+Mostly I/O and error handling.
 *)
 
 module Http = Http_client.Convenience
@@ -85,7 +85,7 @@ let get_result (doi,ids) =
   (decodeDoi doi, List.map (fun (id,weight) -> (List.assoc id source,weight)) ids)
 
 let preprocess timeout latex_string =
-  let url = db_url ^ "_external/preprocess?format=json-plain&timeout=" ^ (encode (string_of_float timeout)) ^ "&latex=" ^ (encode latex_string) in
+  let url = db_url ^ "_external/preprocess?format=json-plain&timeout=" ^ (encode timeout) ^ "&latex=" ^ (encode latex_string) in
   let preprocessed = preprocessed_of_json (Json_io.json_of_string (Http.http_get url)) in
   (preprocessed#json,preprocessed#plain)
 
@@ -145,7 +145,7 @@ let handle_query bktree str =
     try
       let args = (request_of_json (Json_io.json_of_string str))#args in
       let searchTimeout = float_of_string args#searchTimeout in
-      let preprocessorTimeout = float_of_string args#preprocessorTimeout in
+      let preprocessorTimeout = args#preprocessorTimeout in
       let startAt = int_of_string args#startAt in
       let endAt = 
         match args#endAt with
@@ -174,14 +174,14 @@ let handle_queries () =
     handle_query bktree input
   done
 
-(* Updates *)
+(* Updating the index *)
 
 let batch_size = 100
 
 let get_update_batch last_update =
   let url =
     db_url ^ "_all_docs_by_seq?include_docs=true" ^
-    "&startkey=" ^ (string_of_int (last_update + 1)) ^
+    "&startkey=" ^ (string_of_int last_update) ^
     "&endkey=" ^ (string_of_int (last_update + batch_size)) in
   try
     let json = Json_io.json_of_string (Http.http_get url) in
@@ -200,29 +200,25 @@ let run_update index update =
     else ();
     {index with last_update=update#key}
   with _ ->
-    flush_line ("Update failed for document: " ^ update#id ^ "");
+    flush_line ("Update " ^ (string_of_int update#key) ^ "failed (DOI: " ^ update#id ^ ")");
     index
 
-let run_update_batch index =
-  flush_line
-    ("Fetching updates " ^
-    (string_of_int index.last_update) ^
-    " through " ^
-    (string_of_int (index.last_update + batch_size)));
-  let updates = get_update_batch index.last_update in
-  flush_line "Updating...";
-  let index = List.fold_left run_update index updates in
-  flush_line "Saving index";
-  save_index index;
-  load_index ()
+let rec run_update_batches index =
+    flush_line
+      ("Fetching updates from " ^
+      (string_of_int index.last_update) ^
+      " onwards");
+    let update_batch = get_update_batch index.last_update in
+    flush_line "Updating...";
+    let index = List.fold_left run_update index update_batch in
+    flush_line "Saving index";
+    save_index index;
+    if List.length update_batch < batch_size then index else run_update_batches index
 
-let run_updates () =
+let run_updates () = 
   flush_line "Loading index";
   let index = load_index () in
-  let rec run_update_batches index =
-    let index' = run_update_batch index in
-    if index.last_update != index'.last_update then run_update_batches index' else () in
-  run_update_batches index;
+  let index = run_update_batches index in
   flush_line ("Finished updating at update: " ^ (string_of_int index.last_update));
   flush_line "Ok"
 
