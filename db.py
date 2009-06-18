@@ -24,63 +24,89 @@ def initDB():
 
   conn.close()
 
-def postDocs(docs):
+def putDocs(docs):
   conn = httplib.HTTPConnection("localhost:5984")
-  headers = {"Content-type": "application/json"}
-  conn.request("POST", "/documents/_bulk_docs", json.dumps({'all-or-nothing':True, 'docs':docs}), headers)
-  expectResponse(conn,201)
+
+  for doc in docs:
+    conn.request("GET", "/documents/%s" % doc['_id'])
+
+    response = conn.getresponse()
+    if response.status == 200:
+      doc['_rev'] = json.loads(response.read())['_rev']
+    elif response.status == 404:
+      response.read() # Clear the response
+    else:
+      raise UnexpectedResponse(200,response.status)
+
+    conn.request("PUT", "/documents/%s" % doc['_id'], json.dumps(doc))
+    expectResponse(conn,201)
+
   conn.close()
 
-def stuffDocs(docs):
-  for i in xrange(1,100):
-    for doc in docs:
-      doc['_id'] = doc['_id'][:-1] + str(i)
-    postDocs(docs)
+def delDocs(docs):
+  conn = httplib.HTTPConnection("localhost:5984")
+
+  for doc in docs:
+    conn.request("GET", "/documents/%s" % doc['_id'])
+
+    revision = json.loads(expectResponse(conn,200))['_rev']
+    conn.request("DELETE", "/documents/%s?rev=%s" % (doc['_id'], revision))
+
+  conn.close()
 
 # Bulk process a xml document
 def addXml(fileName):
+  print "Reading file %s" % fileName
   xml = minidom.parse(fileName)
 
   # Collect docs
   docs = []
-  for item in xml.childNodes[0].childNodes:
-    if item.nodeName == u'result':
-      doi = item.childNodes[0].childNodes[0].wholeText
-      print ("Parsing %s" % doi)
-      source = {}
-      content = {}
-      for i in xrange(1,len(item.childNodes)):
-        latex = item.childNodes[i].childNodes[0].wholeText
-        source[str(i)] = latex
+  for article in xml.getElementsByTagName("Article"):
+    doi = article.getElementsByTagName("ArticleDOI")[0].childNodes[0].wholeText
+    print ("Parsing article %s" % doi)
+    source = {}
+    content = {}
+
+    for eqn in article.getElementsByTagName("Equation") + article.getElementsByTagName("InlineEquation"):
+      eqnID = eqn.attributes.get('ID').value
+
+      latex = eqn.getElementsByTagName("EquationSource")[0].childNodes[0].wholeText
+      latex = latex.replace("\n","")
+      source[eqnID] = latex
+
+      try:
         renderer = JsonRenderer()
         render(preprocess("\\begin{document}" + latex + "\\end{document}"),renderer)
-        content[str(i)] = renderer.dumps()
-      doc = {'_id': encodeDoi(doi), 'source': source, 'content': content}
-      docs.append(doc)
+        content[eqnID] = renderer.dumps()
+      except Exception:
+        print "Could not parse equation %s" % eqnID
+
+    doc = {'_id': encodeDoi(doi), 'source': source, 'content': content}
+    docs.append(doc)
 
   # Add docs
   print "Adding..."
-  postDocs(docs)
+  putDocs(docs)
 
 def delXml(fileName):
+  print "Reading file %s" % fileName
   xml = minidom.parse(fileName)
 
   # Collect dois
   docs = []
-  for item in xml.childNodes[0].childNodes:
-    if item.nodeName == u'result':
-      doi = item.childNodes[0].childNodes[0].wholeText
-      print ("Parsing %s" % doi)
-      docs.append({'_id': encodeDoi(doi), '_deleted':True})
+  for article in xml.getElementsByTagName("Article"):
+    doi = article.getElementsByTagName("ArticleDOI")[0].childNodes[0].wholeText
+    print ("Parsing %s" % doi)
+    docs.append({'_id': encodeDoi(doi), '_deleted':True})
 
   # Delete docs
   print "Deleting..."
-  postDocs(docs)
+  delDocs(docs)
 
 def usage():
   print "Usage: --init, --add=docs.xml, --del=docs.xml"
 
-import getopt
+import os, os.path, getopt
 
 if __name__ == '__main__':
   try:
@@ -89,9 +115,15 @@ if __name__ == '__main__':
       if opt == "--init":
         initDB()
       if opt == "--add":
-        addXml(arg)
+        for root, _, files in os.walk(arg):
+          for fi in files:
+            if fi.endswith(".xml"):
+              addXml(os.path.join(root,fi))
       if opt == "--del":
-        delXml(arg)
+        for root, _, files in os.walk(arg):
+          for fi in files:
+            if fi.endswith(".xml"):
+              delXml(os.path.join(root,fi))
     print "Ok"
   except getopt.GetoptError:
     usage()
