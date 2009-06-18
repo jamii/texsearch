@@ -31,7 +31,7 @@ let lex str =
 exception Parse_error
 
 (* A simple recursive descent parser. Not the prettiest but yacc would be overkill *)
-let parse_query preprocess tokens =
+let parse_query preprocesser tokens =
   let rec parse_atom tokens =
     match tokens with
       | Delim "NOT" :: rest ->
@@ -44,7 +44,7 @@ let parse_query preprocess tokens =
             | _ -> raise Parse_error)
       | Delim "AND" :: rest | Delim "OR" :: rest | Delim ")" :: rest -> raise Parse_error
       | Delim latex_string :: rest ->
-          let (latex,plain) = preprocess (String.sub latex_string 1 (String.length latex_string - 2)) in
+          let (latex,plain) = preprocesser (String.sub latex_string 1 (String.length latex_string - 2)) in
           parse_compound (Latex (latex,plain)) rest
       | _ -> raise Parse_error
 
@@ -64,7 +64,7 @@ let parse_query preprocess tokens =
  match parse_atom tokens with
   | (query,_) -> query
 
-let of_string preprocess str = parse_query preprocess (lex str)
+let of_string preprocesser str = parse_query preprocesser (lex str)
 
 let rec to_string query =
   match query with
