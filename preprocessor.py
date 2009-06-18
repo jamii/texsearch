@@ -4,34 +4,6 @@ import string, re
 from plasTeX import TeXFragment, TeXDocument
 from plasTeX.DOM import Node
 
-# Ignore useless tags
-ignoreSet = frozenset([
- 'displaymath'
-,'bgroup'
-,'math'
-,'text'
-,'nulldelimiterspace'
-,'kern'
-,'vphantom'
-,'hphantom'
-,'hfill'
-,'vfill'
-,'hbox'
-,'align'
-,'aligned'
-,'gathered'
-,'active::&'
-,'#document'
-,'document'
-,'left'
-,'right'
-,'rm'
-,'par'
-,'None'
-,'mathord'
-,'array'
-])
-
 class BadRender(Exception):
   pass
 
@@ -96,6 +68,34 @@ class PlainRenderer:
   def closeBracket(self):
     self.text.append("}")
 
+# Ignore useless tags
+ignoreSet = frozenset([
+ 'displaymath'
+,'bgroup'
+,'math'
+,'text'
+,'nulldelimiterspace'
+,'kern'
+,'vphantom'
+,'hphantom'
+,'hfill'
+,'vfill'
+,'hbox'
+,'align'
+,'aligned'
+,'gathered'
+,'active::&'
+,'#document'
+,'document'
+,'left'
+,'right'
+,'rm'
+,'par'
+,'None'
+,'mathord'
+,'array'
+])
+
 def render(node,renderer):
   if node.nodeType == Node.TEXT_NODE:
     # Short circuit text nodes
@@ -132,7 +132,7 @@ def renderChildren(node,renderer,brackets):
           if brackets:
             renderer.closeBracket()
         else:
-          continue # Log this - not sure what arguments fall in this category
+          continue 
 
     # Render child nodes
     if brackets:
