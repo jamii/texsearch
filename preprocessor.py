@@ -160,38 +160,71 @@ def requests():
     yield json.loads(line)
     line = sys.stdin.readline()
 
+import signal
+
+class Timeout(Exception):
+  def __str__(self):
+    return "Timed out"
+
+def handleTimeout(signum,frame):
+  raise Timeout()
+
 def main():
+  # Work around the lack of real threading by using an alarm signal for timeouts
+  signal.signal(signal.SIGALRM, handleTimeout)
+
   for request in requests():
     try:
-      query = request['query']
-      result = preprocess("\\begin{document} $$ " + query['latex'] + " $$ \\end{document}")
-      format = query['format']
-      if format == 'json-plain':
-        jsonRenderer = JsonRenderer()
-        render(result,jsonRenderer)
-        plainRenderer = PlainRenderer()
-        render(result,plainRenderer)
-        response = {'code':200, 'json':{'json':jsonRenderer.dumps(), 'plain':plainRenderer.dumps()}}
-      elif format == 'json':
-        renderer = JsonRenderer()
-        render(result,renderer)
-        response = {'code':200, 'json':renderer.dumps()}
-      elif format == 'xml':
-        renderer = XmlRenderer()
-        render(result,renderer)
-        response = {'code':200, 'body':renderer.dumps(), 'headers':{'Content-type':'text/xml'}}
-      elif format == 'plain':
-        renderer = PlainRenderer()
-        render(result,renderer)
-        response = {'code':200, 'body':renderer.dumps(), 'headers':{'Content-type':'text/plain'}}
-      else:
-        raise KeyError()
-    except KeyError, e:
-      response = {'code':400, 'body':('Error: ' + str(e)), 'headers':{'Content-type':'text/plain'}} # Bad request
-    except Exception, e:
-      response = {'code':500, 'body':('Error: ' + str(e)), 'headers':{'Content-type':'text/plain'}}# Internal server error
+      try: # Nested try because older versions of python cant handle except/finally
+        query = request['query']
+
+        format = query['format']
+
+        try:
+          timeout = int(query['timeout'])
+        except ValueError, e:
+          timeout = 1
+        except KeyError, e:
+          timeout = 1
+        signal.alarm(timeout)    
+   
+        result = preprocess("\\begin{document} $$ " + query['latex'] + " $$ \\end{document}")
+
+        if format == 'json-plain':
+          jsonRenderer = JsonRenderer()
+          render(result,jsonRenderer)
+          plainRenderer = PlainRenderer()
+          render(result,plainRenderer)
+          response = {'code':200, 'json':{'json':jsonRenderer.dumps(), 'plain':plainRenderer.dumps()}}
+        elif format == 'json':
+          renderer = JsonRenderer()
+          render(result,renderer)
+          response = {'code':200, 'json':renderer.dumps()}
+        elif format == 'xml':
+          renderer = XmlRenderer()
+          render(result,renderer)
+          response = {'code':200, 'body':renderer.dumps(), 'headers':{'Content-type':'text/xml'}}
+        elif format == 'plain':
+          renderer = PlainRenderer()
+          render(result,renderer)
+          response = {'code':200, 'body':renderer.dumps(), 'headers':{'Content-type':'text/plain'}}
+        else:
+          response = {'code':400, 'body':('Error: bad format argument'), 'headers':{'Content-type':'text/plain'}} # Bad request
+
+      except KeyError, e:
+        response = {'code':400, 'body':('Error: ' + str(e)), 'headers':{'Content-type':'text/plain'}} # Bad request
+      except Timeout, e:
+        response = {'code':500, 'body':('Error: ' + str(e)), 'headers':{'Content-type':'text/plain'}} # Internal server error
+      except Exception, e:
+        response = {'code':500, 'body':('Error: ' + str(e)), 'headers':{'Content-type':'text/plain'}} # Internal server error
+        sys.exit(0) # Bail out to ensure theres no corrupted state
+    finally:
+      # Deactivate the timeout
+      signal.alarm(0)
+
     sys.stdout.write("%s\n" % json.dumps(response))
     sys.stdout.flush()
+    
 
 if __name__ == "__main__":
     main()
