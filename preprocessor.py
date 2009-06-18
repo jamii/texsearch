@@ -104,13 +104,14 @@ def render(node,renderer):
       renderer.addText(text)
   elif node.nodeName in ignoreSet:
     # Ignore node and move on to children
-    renderChildren(node,renderer,False)
+    for child in node.childNodes:
+      render(child,renderer)
   else:
     renderer.pushMacro(node.nodeName)
-    renderChildren(node,renderer,True)
+    renderChildren(node,renderer)
     renderer.popMacro(node.nodeName)
 
-def renderChildren(node,renderer,brackets):
+def renderChildren(node,renderer):
     # See if we have any attributes to render
     if node.hasAttributes():
       for key, value in node.attributes.items():
@@ -119,27 +120,22 @@ def renderChildren(node,renderer,brackets):
         if key == 'self' or key == '*modifier*':
           continue
         elif value.__class__ is TeXFragment:
-          if brackets:
-            renderer.openBracket()
+          renderer.openBracket()
           for child in value.childNodes:
             render(child,renderer)
-          if brackets:
-            renderer.closeBracket()
+          renderer.closeBracket()
         elif value.__class__ is Node:
-          if brackets:
-            renderer.openBracket()
+          renderer.openBracket()
           render(value,renderer)
-          if brackets:
-            renderer.closeBracket()
+          renderer.closeBracket()
         else:
           continue 
 
     # Render child nodes
-    if brackets:
+    if node.childNodes:
       renderer.openBracket()
-    for child in node.childNodes:
-      render(child,renderer)
-    if brackets:
+      for child in node.childNodes:
+        render(child,renderer)
       renderer.closeBracket()
 
 from plasTeX.TeX import TeX
