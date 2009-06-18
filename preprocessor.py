@@ -217,7 +217,6 @@ def main():
         response = {'code':500, 'body':('Error: ' + str(e)), 'headers':{'Content-type':'text/plain'}} # Internal server error
       except Exception, e:
         response = {'code':500, 'body':('Error: ' + str(e)), 'headers':{'Content-type':'text/plain'}} # Internal server error
-        sys.exit(0) # Bail out to ensure theres no corrupted state
     finally:
       # Deactivate the timeout
       signal.alarm(0)
