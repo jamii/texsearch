@@ -142,7 +142,7 @@ from plasTeX.TeX import TeX
 
 def preprocess(string):
   # Instantiate a TeX processor and parse the input text
-  tex = TeX()
+  tex = TeX(TeXDocument())
   tex.disableLogging()
   tex.input(string)
   return tex.parse()
@@ -179,12 +179,12 @@ def main():
         try:
           timeout = int(query['timeout'])
         except ValueError, e:
-          timeout = 1
+          timeout = 5
         except KeyError, e:
-          timeout = 1
+          timeout = 5
         signal.alarm(timeout)    
    
-        result = preprocess("\\begin{document} $$ " + query['latex'] + " $$ \\end{document}")
+        result = preprocess("\\begin{document} " + query['latex'] + " \\end{document}")
 
         if format == 'json-plain':
           jsonRenderer = JsonRenderer()

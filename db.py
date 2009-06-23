@@ -56,6 +56,8 @@ def delDocs(docs):
 
 # Bulk process a xml document
 def addXml(fileName):
+  conn = httplib.HTTPConnection("localhost:5984")
+
   print "Reading file %s" % fileName
   xml = minidom.parse(fileName)
 
@@ -71,15 +73,15 @@ def addXml(fileName):
       eqnID = eqn.attributes.get('ID').value
 
       latex = eqn.getElementsByTagName("EquationSource")[0].childNodes[0].wholeText
-      latex = latex.replace("\n","")
       source[eqnID] = latex
 
       try:
+        preprocessed = preprocess("\\begin{document} " + latex + " \\end{document}")
         renderer = JsonRenderer()
-        render(preprocess("\\begin{document}" + latex + "\\end{document}"),renderer)
+        render(preprocessed,renderer)
         content[eqnID] = renderer.dumps()
-      except Exception:
-        print "Could not parse equation %s" % eqnID
+      except Exception, e:
+        print "Preprocessor failed on equation %s : %s" % (eqnID, e)
 
     doc = {'_id': encodeDoi(doi), 'source': source, 'content': content}
     docs.append(doc)
@@ -97,7 +99,7 @@ def delXml(fileName):
   for article in xml.getElementsByTagName("Article"):
     doi = article.getElementsByTagName("ArticleDOI")[0].childNodes[0].wholeText
     print ("Parsing %s" % doi)
-    docs.append({'_id': encodeDoi(doi), '_deleted':True})
+    docs.append({'_id': encodeDoi(doi)})
 
   # Delete docs
   print "Deleting..."

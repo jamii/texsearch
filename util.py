@@ -9,6 +9,7 @@ class UnexpectedResponse(Exception):
 def expectResponse(conn,code):
   response = conn.getresponse()
   if response.status != code:
+    response.read() # Clear the response
     raise UnexpectedResponse(code,response.status)
   return response.read()
 
