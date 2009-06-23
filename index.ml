@@ -197,7 +197,7 @@ let get_update_batch last_update =
   let url =
     db_url ^ "_all_docs_by_seq?include_docs=true" ^
     "&startkey=" ^ (string_of_int last_update) ^
-    "&endkey=" ^ (string_of_int (last_update + batch_size)) in
+    "&limit=" ^ (string_of_int batch_size) in
   try
     let json = Json_io.json_of_string (Http.http_get url) in
     (updates_of_json json)#rows
@@ -207,6 +207,12 @@ let get_update_batch last_update =
 
 exception FailedUpdate of int * doi
 
+(* Strip out repeated equations *)
+let unique content =
+  let hashtbl = Hashtbl.create 50 in
+  List.iter (fun (id,eqn) -> Hashtbl.replace hashtbl eqn id) content;
+  Hashtbl.fold (fun eqn id ls -> (id,eqn)::ls) hashtbl []
+
 let run_update index update =
   try
     Bktree.delete update#id index.bktree;
@@ -214,7 +220,7 @@ let run_update index update =
     then
       let doc = document_of_json update#doc in
       if List.length doc#content > 0
-      then Bktree.add (Bktree.node_of update#id doc#content) index.bktree
+      then Bktree.add (Bktree.node_of update#id (unique doc#content)) index.bktree
       else ()
     else ();
     {index with last_update=update#key}
