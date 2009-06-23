@@ -49,7 +49,7 @@ def testIndex(docs,n,server):
         topResult = results.childNodes[1]
         doi = topResult.attributes['doi'].childNodes[0].wholeText
         if doi == searchDoi:
-          print "Test %d: success (%d results)" % (i, len(results.childNodes))
+          print "Test %d: success (%d results)" % (i, len(results.childNodes) - 1)
           successes += 1
         else:
           failures += 1
