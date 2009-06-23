@@ -6,6 +6,7 @@ Mostly I/O and error handling.
 module Http = Http_client.Convenience
 let encode url = Netencoding.Url.encode ~plus:false url
 
+let encodeDoi doi = Str.global_replace (Str.regexp "/") "_" doi
 let decodeDoi doi = Str.global_replace (Str.regexp "_") "/" doi
 
 let flush_line str = print_string str; print_string "\n"; flush stdout
@@ -26,7 +27,8 @@ and request =
     ; ?searchTimeout : string = "10.0"
     ; ?preprocessorTimeout : string = "5.0"
     ; ?limit : string = "1000"
-    ; ?format : string = "xml" > >
+    ; ?format : string = "xml" 
+    ; ?doi : string option > >
 
 and update =
   < id : doi
@@ -151,7 +153,12 @@ type search_result =
   | Results of results
   | LimitExceeded
 
-let run_query bktree query limit =
+let run_single_query doi query =
+  let eqns = (get_document doi)#content in
+  let (_,result) = Bktree.query_against query eqns (Bktree.cutoff_length query) in
+  Results [get_result (doi, result)]
+
+let run_full_query bktree query limit =
   let results = Bktree.run_search (limit+1) (Bktree.new_search query bktree) in
   if List.length results > limit
   then LimitExceeded
@@ -164,8 +171,12 @@ let handle_query bktree str =
       let searchTimeout = float_of_string args#searchTimeout in
       let preprocessorTimeout = args#preprocessorTimeout in
       let limit = int_of_string args#limit in
-      let query = Query.of_string (preprocess preprocessorTimeout) args#searchTerm in      
-      let search_results = with_timeout searchTimeout (fun _ -> run_query bktree query limit) in
+      let query = Query.of_string (preprocess preprocessorTimeout) args#searchTerm in 
+      let search_results = 
+        with_timeout searchTimeout (fun _ ->
+          match args#doi with
+            | Some doi -> run_single_query (encodeDoi doi) query (* Search within a single article *)
+            | None -> run_full_query bktree query limit (* Search within all articles *)) in
       match (search_results, args#format) with
         | (Results results, "xml") -> xml_response results (Query.to_string query)
         | (LimitExceeded, "xml") -> xml_limit_response

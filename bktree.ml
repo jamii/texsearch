@@ -41,14 +41,16 @@ and query_dist_not query latex =
     | Or (query1,query2) -> max (query_dist_not query1 latex) (query_dist_not query2 latex)
     | Not query -> query_dist query latex
 
-(* Return each equation whose distance to the query is less than the cutoff, as well as the min/max distance *)
+(* Return each equation whose distance to the query is less than the cutoff, as well as the min distance *)
 let query_against query equations cutoff =
-  List.fold_left
-    (fun (min_dist,matches) (id,latex) ->
-      let dist = query_dist query latex in
-      if dist < cutoff then (min dist min_dist, (id,dist) :: matches) else (min dist min_dist, matches))
-    (max_int,[])
-    equations
+  let (min_dist, ranked_equations) = 
+    List.fold_left
+      (fun (min_dist,matches) (id,latex) ->
+        let dist = query_dist query latex in
+        if dist < cutoff then (min dist min_dist, (id,dist) :: matches) else (min dist min_dist, matches))
+      (max_int,[])
+      equations in
+  (min_dist, List.sort (fun a b -> compare (snd a) (snd b)) ranked_equations)
 
 (* index_dist b c = min_i max_j (left_edit_dist b_j c_i)
    the right half of the bounding equation at the top of the page *)
@@ -153,10 +155,12 @@ let rec pop_search_node search =
       search.unsearched.(search.min_dist) <- rest;
       Some bktree
 
+(* The choice of cutoff is completely arbitrary *)
+let cutoff_length query = 1 + (min 5 (Query.max_length query / 3))
+
 (* The initial search structure *)
 let new_search query bktree =
-  (* The choice of cutoff is completely arbitrary *)
-  let cutoff = 1 + (min 10 (Query.max_length query / 2))  in
+  let cutoff = cutoff_length query  in
   let search =
     { query = query
     ; cutoff = cutoff
