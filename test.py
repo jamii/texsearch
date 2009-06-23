@@ -41,6 +41,7 @@ def testIndex(docs,n,server):
     searchTerm = random.choice(searchDoc['source'])
     try:
       conn = httplib.HTTPConnection(server)
+      # urllib.quote fails on unicode input, not much we can do about it
       conn.request("GET", "/documents/_external/index?format=xml&searchTerm=\"%s\"" % urllib.quote(searchTerm))
       result = expectResponse(conn,200)
       xml = minidom.parseString(result)

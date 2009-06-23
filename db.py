@@ -66,16 +66,21 @@ def addXml(fileName):
   for article in xml.getElementsByTagName("Article"):
     doi = article.getElementsByTagName("ArticleDOI")[0].childNodes[0].wholeText
     print ("Parsing article %s" % doi)
-    source = {}
-    content = {}
-
+    
+    # Collect equation sources, ignoring duplicates
+    equations = {}
     for eqn in article.getElementsByTagName("Equation") + article.getElementsByTagName("InlineEquation"):
       eqnID = eqn.attributes.get('ID').value
 
       latex = eqn.getElementsByTagName("EquationSource")[0].childNodes[0].wholeText
-      source[eqnID] = latex
+      equations[latex] = eqnID
 
+    source = {}
+    content = {}
+    for latex, eqnID in equations.items():
       try:
+        source[eqnID] = latex 
+
         preprocessed = preprocess("\\begin{document} " + latex + " \\end{document}")
         renderer = JsonRenderer()
         render(preprocessed,renderer)

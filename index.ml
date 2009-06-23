@@ -218,12 +218,6 @@ let get_update_batch last_update =
 
 exception FailedUpdate of int * doi
 
-(* Strip out repeated equations *)
-let unique content =
-  let hashtbl = Hashtbl.create 50 in
-  List.iter (fun (id,eqn) -> Hashtbl.replace hashtbl eqn id) content;
-  Hashtbl.fold (fun eqn id ls -> (id,eqn)::ls) hashtbl []
-
 let run_update index update =
   try
     Bktree.delete update#id index.bktree;
@@ -231,7 +225,7 @@ let run_update index update =
     then
       let doc = document_of_json update#doc in
       if List.length doc#content > 0
-      then Bktree.add (Bktree.node_of update#id (unique doc#content)) index.bktree
+      then Bktree.add (Bktree.node_of update#id doc#content) index.bktree
       else ()
     else ();
     {index with last_update=update#key}
