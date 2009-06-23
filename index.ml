@@ -25,8 +25,7 @@ and request =
     < searchTerm : string
     ; ?searchTimeout : string = "10.0"
     ; ?preprocessorTimeout : string = "5.0"
-    ; ?startAt : string = "0"
-    ; ?endAt : string option
+    ; ?limit : string = "1000"
     ; ?format : string = "xml" > >
 
 and update =
@@ -103,6 +102,11 @@ let json_response results query_string =
         [ ("query",Json_type.String query_string)
         ; ("results",json_of_results results) ]) ]
 
+let json_limit_response = 
+  Json_type.Object
+    [ ("code",Json_type.Int 200)
+    ; ("json",Json_type.String "Limit exceeded") ]
+
 let xml_of_results results query_string =
   let xml_of_eqn (source,weight) =
     Xml.Element ("equation", [("distance",string_of_int weight)], [Xml.PCData source]) in
@@ -117,6 +121,12 @@ let xml_response results query_string =
     [ ("code",Json_type.Int 200)
     ; ("headers",Json_type.Object [("Content-type",Json_type.String "text/xml")])
     ; ("body",Json_type.String (xml_of_results results query_string)) ]
+
+let xml_limit_response =
+  Json_type.Object
+    [ ("code",Json_type.Int 200)
+    ; ("headers",Json_type.Object [("Content-type",Json_type.String "text/xml")])
+    ; ("body",Json_type.String (Xml.to_string (Xml.Element ("LimitExceeded",[],[])))) ]
 
 (* Timeouts *)
 
@@ -137,8 +147,15 @@ let with_timeout tsecs f =
 
 (* Queries *)
 
-let run_query bktree query startAt endAt =
-  List.map get_result (Util.drop (startAt-1) (Bktree.run_search endAt (Bktree.new_search query bktree)))
+type search_result =
+  | Results of results
+  | LimitExceeded
+
+let run_query bktree query limit =
+  let results = Bktree.run_search (limit+1) (Bktree.new_search query bktree) in
+  if List.length results > limit
+  then LimitExceeded
+  else Results (List.map get_result results)
 
 let handle_query bktree str =
   let response =
@@ -146,16 +163,14 @@ let handle_query bktree str =
       let args = (request_of_json (Json_io.json_of_string str))#args in
       let searchTimeout = float_of_string args#searchTimeout in
       let preprocessorTimeout = args#preprocessorTimeout in
-      let startAt = int_of_string args#startAt in
-      let endAt = 
-        match args#endAt with
-          | None -> max_int
-          | Some str -> int_of_string str in
+      let limit = int_of_string args#limit in
       let query = Query.of_string (preprocess preprocessorTimeout) args#searchTerm in      
-      let results = with_timeout searchTimeout (fun _ -> run_query bktree query startAt endAt) in
-      match args#format with
-        | "xml" -> xml_response results (Query.to_string query)
-        | "json" -> json_response results (Query.to_string query)
+      let search_results = with_timeout searchTimeout (fun _ -> run_query bktree query limit) in
+      match (search_results, args#format) with
+        | (Results results, "xml") -> xml_response results (Query.to_string query)
+        | (LimitExceeded, "xml") -> xml_limit_response
+        | (Results results, "json") -> json_response results (Query.to_string query)
+        | (LimitExceeded, "json") -> json_limit_response
     with
       | Json_type.Json_error _ | Failure _ | Query.Parse_error ->
           Json_type.Object [("code",Json_type.Int 400)] (* Bad request *)
@@ -190,35 +205,43 @@ let get_update_batch last_update =
     flush_line "Error contacting database (documents)";
     raise Exit
 
+exception FailedUpdate of int * doi
+
 let run_update index update =
   try
     Bktree.delete update#id index.bktree;
     if not (update#value#deleted)
     then
       let doc = document_of_json update#doc in
-      Bktree.add (Bktree.node_of update#id doc#content) index.bktree
+      if List.length doc#content > 0
+      then Bktree.add (Bktree.node_of update#id doc#content) index.bktree
+      else ()
     else ();
     {index with last_update=update#key}
   with _ ->
-    flush_line ("Update " ^ (string_of_int update#key) ^ "failed (DOI: " ^ update#id ^ ")");
-    index
+    raise (FailedUpdate (update#key, update#id))
 
 let rec run_update_batches index =
-    flush_line
-      ("Fetching updates from " ^
-      (string_of_int index.last_update) ^
-      " onwards");
-    let update_batch = get_update_batch index.last_update in
-    flush_line "Updating...";
-    let index = List.fold_left run_update index update_batch in
-    flush_line "Saving index";
-    save_index index;
-    if List.length update_batch < batch_size then index else run_update_batches index
+  flush_line
+    ("Fetching updates from " ^
+    (string_of_int index.last_update) ^
+    " onwards");
+  let update_batch = get_update_batch index.last_update in
+  flush_line "Updating...";
+  let index = List.fold_left run_update index update_batch in
+  flush_line "Saving index";
+  save_index index;
+  if List.length update_batch < batch_size then index else run_update_batches index
 
 let run_updates () = 
   flush_line "Loading index";
   let index = load_index () in
-  let index = run_update_batches index in
+  let index = 
+  try
+    run_update_batches index
+  with FailedUpdate(key,id) ->
+    flush_line ("Update " ^ (string_of_int key) ^ " failed (DOI: " ^ id ^ ")");
+    index in
   flush_line ("Finished updating at update: " ^ (string_of_int index.last_update));
   flush_line "Ok"
 
