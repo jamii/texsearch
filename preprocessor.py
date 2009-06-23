@@ -107,9 +107,9 @@ def render(node,renderer):
     for child in node.childNodes:
       render(child,renderer)
   else:
-    renderer.pushMacro(node.nodeName)
+    renderer.pushMacro(unicode(node.nodeName))
     renderChildren(node,renderer)
-    renderer.popMacro(node.nodeName)
+    renderer.popMacro(unicode(node.nodeName))
 
 def renderChildren(node,renderer):
     # See if we have any attributes to render
@@ -139,10 +139,14 @@ def renderChildren(node,renderer):
       renderer.closeBracket()
 
 from plasTeX.TeX import TeX
+from plasTeX.Base.TeX.Primitives import MathShift
 
 def preprocess(string):
+  # PlasTeX bug - this variable doent get reinitialised
+  MathShift.inEnv = []
+
   # Instantiate a TeX processor and parse the input text
-  tex = TeX(TeXDocument())
+  tex = TeX()
   tex.disableLogging()
   tex.input(string)
   return tex.parse()
