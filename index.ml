@@ -272,7 +272,7 @@ let init_index () =
   if read_line () = "y"
   then
     (flush_line "Saving index";
-     save_index { last_update = 0 ; bktree = Bktree.empty };
+     save_index { last_update = -1 ; bktree = Bktree.empty };
      flush_line "Ok")
   else
     flush_line "Ok, nothing was done"
