@@ -61,6 +61,13 @@ def addXml(fileName):
   print "Reading file %s" % fileName
   xml = minidom.parse(fileName)
 
+  journalID = xml.getElementsByTagName("JournalID")[0].childNodes[0].wholeText
+
+  if xml.getElementsByTagName("PrintDate"):
+    publicationYear = xml.getElementsByTagName("PrintDate")[0].getElementsByTagName("Year")[0].childNodes[0].wholeText
+  else: 
+    publicationYear = xml.getElementsByTagName("CoverDate")[0].getElementsByTagName("Year")[0].childNodes[0].wholeText
+
   # Collect docs
   docs = []
   for article in xml.getElementsByTagName("Article"):
@@ -88,7 +95,7 @@ def addXml(fileName):
       except Exception, e:
         print "Preprocessor failed on equation %s : %s" % (eqnID, e)
 
-    doc = {'_id': encodeDoi(doi), 'source': source, 'content': content}
+    doc = {'_id': encodeDoi(doi), 'journalID': journalID, 'publicationYear': publicationYear, 'source': source, 'content': content}
     docs.append(doc)
 
   # Add docs
