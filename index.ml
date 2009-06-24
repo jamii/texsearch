@@ -18,7 +18,9 @@ type json doi = string
 and id = string
 
 and document =
-  < content : (string * Latex.t) assoc (* id*Latex.t *)
+  < journalID : string 
+  ; publicationYear : string 
+  ; content : (string * Latex.t) assoc (* id*Latex.t *)
   ; source : (string * string) assoc > (* id*string *)
 
 and request =
@@ -28,7 +30,10 @@ and request =
     ; ?preprocessorTimeout : string = "5.0"
     ; ?limit : string = "1000"
     ; ?format : string = "xml" 
-    ; ?doi : string option > >
+    ; ?doi : string option 
+    ; ?journalID : string option
+    ; ?publishedAfter : string option 
+    ; ?publishedBefore : string option > >
 
 and update =
   < id : doi
@@ -81,21 +86,12 @@ let get_document doi =
   let json = Json_io.json_of_string (Http.http_get url) in
   document_of_json json
 
-let get_result (doi,ids) =
-  let source = (get_document doi)#source in
-  (decodeDoi doi, List.map (fun (id,weight) -> (List.assoc id source,weight)) ids)
-
 let preprocess timeout latex_string =
   let url = db_url ^ "_external/preprocess?format=json-plain&timeout=" ^ (encode timeout) ^ "&latex=" ^ (encode latex_string) in
   let preprocessed = preprocessed_of_json (Json_io.json_of_string (Http.http_get url)) in
   (preprocessed#json,preprocessed#plain)
 
 (* Responses to couchdb *)
-
-type response =
-  | Ok of Json_type.t
-  | BadRequest
-  | InternalServerError
 
 let json_response results query_string =
   Json_type.Object
@@ -153,16 +149,25 @@ type search_result =
   | Results of results
   | LimitExceeded
 
-let run_single_query doi query =
-  let eqns = (get_document doi)#content in
-  let (_,result) = Bktree.query_against query eqns (Bktree.cutoff_length query) in
-  Results [get_result (doi, result)]
+let get_result filter (doi,ids) =
+  let doc = get_document doi in
+  if filter doc
+  then 
+    let weighted_source = List.map (fun (id,weight) -> (List.assoc id doc#source, weight)) ids in
+    Some (decodeDoi doi, weighted_source)
+  else
+    None
 
-let run_full_query bktree query limit =
+let run_single_query doi filter query =
+  let eqns = (get_document doi)#content in
+  let (_,weighted_eqns) = Bktree.query_against query eqns (Bktree.cutoff_length query) in
+  Results (Util.filter_map (get_result filter) [(doi, weighted_eqns)])
+
+let run_full_query bktree limit filter query =
   let results = Bktree.run_search (limit+1) (Bktree.new_search query bktree) in
   if List.length results > limit
   then LimitExceeded
-  else Results (List.map get_result results)
+  else Results (Util.filter_map (get_result filter) results)
 
 let handle_query bktree str =
   let response =
@@ -171,12 +176,16 @@ let handle_query bktree str =
       let searchTimeout = float_of_string args#searchTimeout in
       let preprocessorTimeout = args#preprocessorTimeout in
       let limit = int_of_string args#limit in
-      let query = Query.of_string (preprocess preprocessorTimeout) args#searchTerm in 
+      let query = Query.of_string (preprocess preprocessorTimeout) args#searchTerm in
+      let filter document = 
+            ((args#journalID = None) || (args#journalID = Some document#journalID))
+        &&  ((args#publishedBefore = None) || (args#publishedBefore >= Some document#publicationYear))
+        &&  ((args#publishedAfter  = None) || (args#publishedAfter  <= Some document#publicationYear)) in
       let search_results = 
         with_timeout searchTimeout (fun _ ->
           match args#doi with
-            | Some doi -> run_single_query (encodeDoi doi) query (* Search within a single article *)
-            | None -> run_full_query bktree query limit (* Search within all articles *)) in
+            | Some doi -> run_single_query (encodeDoi doi) filter query (* Search within a single article *)
+            | None -> run_full_query bktree limit filter query (* Search within all articles *)) in
       match (search_results, args#format) with
         | (Results results, "xml") -> xml_response results (Query.to_string query)
         | (LimitExceeded, "xml") -> xml_limit_response
@@ -186,7 +195,7 @@ let handle_query bktree str =
       | Json_type.Json_error _ | Failure _ | Query.Parse_error ->
           Json_type.Object [("code",Json_type.Int 400)] (* Bad request *)
       | Timeout ->
-          Json_type.Object [("code",Json_type.Int 500) (* Internal server error *)
+          Json_type.Object [ ("code",Json_type.Int 500) (* Internal server error *)
                            ; ("headers",Json_type.Object [("Content-type",Json_type.String "text/plain")])
                            ; ("body",Json_type.String "Error: Timed out") ]
       | _ ->
@@ -205,6 +214,10 @@ let handle_queries () =
 let batch_size = 100
 
 let get_update_batch last_update =
+  flush_line
+    ("Fetching updates from " ^
+    (string_of_int last_update) ^
+    " onwards");
   let url =
     db_url ^ "_all_docs_by_seq?include_docs=true" ^
     "&startkey=" ^ (string_of_int last_update) ^
@@ -233,11 +246,7 @@ let run_update index update =
     raise (FailedUpdate (update#key, update#id))
 
 let rec run_update_batches index =
-  flush_line
-    ("Fetching updates from " ^
-    (string_of_int index.last_update) ^
-    " onwards");
-  let update_batch = get_update_batch index.last_update in
+  let update_batch = get_update_batch (index.last_update+1) in
   flush_line "Updating...";
   let index = List.fold_left run_update index update_batch in
   flush_line "Saving index";
@@ -248,11 +257,11 @@ let run_updates () =
   flush_line "Loading index";
   let index = load_index () in
   let index = 
-  try
-    run_update_batches index
-  with FailedUpdate(key,id) ->
-    flush_line ("Update " ^ (string_of_int key) ^ " failed (DOI: " ^ id ^ ")");
-    index in
+    try
+      run_update_batches index
+    with FailedUpdate(key,id) ->
+      flush_line ("Update " ^ (string_of_int key) ^ " failed (DOI: " ^ id ^ ")");
+      index in
   flush_line ("Finished updating at update: " ^ (string_of_int index.last_update));
   flush_line "Ok"
 
