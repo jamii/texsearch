@@ -55,8 +55,8 @@ def testIndex(docs,n,server):
         else:
           failures += 1
           print "Test %d: wrong result" % i
-          #print searchDoi, doi
-          #print searchTerm
+          print searchDoi, doi
+          print searchTerm
       else:
         empties += 1
         print "Test %d: no results" % i
@@ -66,9 +66,6 @@ def testIndex(docs,n,server):
     except Exception, e:
       errors += 1
       print "Test %d: %s" % (i,e)
-      print searchDoi
-      print searchTerm
-      print result
 
   print "Successes %d, empties %d, failures %d, errors %d" % (successes,empties,failures,errors)
 
