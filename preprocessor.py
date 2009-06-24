@@ -1,7 +1,7 @@
 #!/bin/env python
 
 import string, re
-from plasTeX import TeXFragment, TeXDocument
+from plasTeX import TeXFragment
 from plasTeX.DOM import Node
 
 class BadRender(Exception):
@@ -181,7 +181,7 @@ def main():
         format = query['format']
 
         try:
-          timeout = int(query['timeout'])
+          timeout = int(float(query['timeout']))
         except ValueError, e:
           timeout = 5
         except KeyError, e:
