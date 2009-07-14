@@ -14,7 +14,7 @@ let left_edit_distance (latexL : Latex.t) (latexR : Latex.t) =
   let maxl, maxr = Array.length latexL, Array.length latexR in
   if maxl = 0 then 0 else
   if maxr = 0 then maxl else
-  (* cache.(i).(j) is the left_edit_distance between latexL[i-maxl] and latexR[j-maxr] *)
+  (* cache.(l).(r) is the left_edit_distance between latexL[l to maxl] and latexR[r to maxr] *)
   let cache = Array.make_matrix (maxl + 1) (maxr + 1) 0 in
   (* Must match everything on the left *)
   for l = maxl - 1 downto 0 do
