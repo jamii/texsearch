@@ -109,7 +109,9 @@ let xml_of_results results query_string =
   let xml_of_eqn (source,weight) =
     Xml.Element ("equation", [("distance",string_of_int weight)], [Xml.PCData source]) in
   let xml_of_result (doi,eqns) =
-    Xml.Element ("result", [("doi", decodeDoi doi)], (List.map xml_of_eqn eqns)) in
+    Xml.Element ("result", 
+      [("doi", decodeDoi doi);("count", string_of_int (List.length eqns))], 
+      (List.map xml_of_eqn eqns)) in
   let xml_of_query_string =
     Xml.Element ("query",[],[Xml.PCData query_string]) in
   Xml.to_string (Xml.Element ("results", [], xml_of_query_string :: (List.map xml_of_result results)))
