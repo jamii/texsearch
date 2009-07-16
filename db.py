@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python
 import sys, httplib, urllib
 from xml.dom import minidom
 from preprocessor import preprocess, render, JsonRenderer
@@ -78,9 +78,15 @@ def addXml(fileName):
     equations = {}
     for eqn in article.getElementsByTagName("Equation") + article.getElementsByTagName("InlineEquation"):
       eqnID = eqn.attributes.get('ID').value
-
-      latex = eqn.getElementsByTagName("EquationSource")[0].childNodes[0].wholeText
-      equations[latex] = eqnID
+      try:
+        eqnSource = eqn.getElementsByTagName("EquationSource")[0]
+        if eqnSource.attributes.get('Format').value == "TEX":
+          latex = eqnSource.childNodes[0].wholeText
+          equations[latex] = eqnID
+      except IndexError:
+        print ("Note: no equation source for eqn %s" % eqnID)
+      except AttributeError:
+        print ("Note: missing format attribute for eqn %s" % eqnID)
 
     source = {}
     content = {}
