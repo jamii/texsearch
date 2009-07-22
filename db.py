@@ -5,6 +5,8 @@ from preprocessor import preprocess, render, JsonRenderer
 import simplejson as json
 from util import expectResponse, encodeDoi
 
+couchdb = "localhost:5984"
+
 def initDB():
   # Warn user
   response = raw_input("This will erase the texsearch database. Are you sure? (y/n):")
@@ -12,7 +14,7 @@ def initDB():
     print "Ok, nothing was done"
     sys.exit(0)
 
-  conn = httplib.HTTPConnection("localhost:5984")
+  conn = httplib.HTTPConnection(couchdb)
 
   print "Deleting existing databases"
   conn.request("DELETE", "/documents")
@@ -24,27 +26,39 @@ def initDB():
 
   conn.close()
 
-def putDocs(docs):
-  conn = httplib.HTTPConnection("localhost:5984")
+def addDocs(docs):
+  conn = httplib.HTTPConnection(couchdb)
 
   for doc in docs:
     conn.request("GET", "/documents/%s" % doc['_id'])
 
     response = conn.getresponse()
-    if response.status == 200:
-      doc['_rev'] = json.loads(response.read())['_rev']
+
+    if response.status == 200: 
+      # Entry already exists
+      oldDoc = json.loads(response.read())
+      if (doc['type'] == 'xml.meta') and (oldDoc['type'] == 'xml'):
+        # Full document has stricly more information than the meta 
+        print "Full entry already exists, not overwriting with meta"
+      else:
+        # Safe to overwrite
+        print "Overwriting existing entry"
+        doc['_rev'] = oldDoc['_rev']
+        conn.request("PUT", "/documents/%s" % doc['_id'], json.dumps(doc))
+        expectResponse(conn,201)
     elif response.status == 404:
+      # No existing entry
+      print "Adding new entry"
       response.read() # Clear the response
+      conn.request("PUT", "/documents/%s" % doc['_id'], json.dumps(doc))
+      expectResponse(conn,201)
     else:
       raise UnexpectedResponse(200,response.status)
-
-    conn.request("PUT", "/documents/%s" % doc['_id'], json.dumps(doc))
-    expectResponse(conn,201)
 
   conn.close()
 
 def delDocs(docs):
-  conn = httplib.HTTPConnection("localhost:5984")
+  conn = httplib.HTTPConnection(couchdb)
 
   for doc in docs:
     conn.request("GET", "/documents/%s" % doc['_id'])
@@ -55,8 +69,8 @@ def delDocs(docs):
   conn.close()
 
 # Bulk process a xml document
-def addXml(fileName):
-  conn = httplib.HTTPConnection("localhost:5984")
+def addXml(fileName, type):
+  conn = httplib.HTTPConnection(couchdb)
 
   print "Reading file %s" % fileName
   xml = minidom.parse(fileName)
@@ -101,12 +115,11 @@ def addXml(fileName):
       except Exception, e:
         print "Preprocessor failed on equation %s : %s" % (eqnID, e)
 
-    doc = {'_id': encodeDoi(doi), 'journalID': journalID, 'publicationYear': publicationYear, 'source': source, 'content': content}
+    doc = {'_id': encodeDoi(doi), 'journalID': journalID, 'publicationYear': publicationYear, 'type':type, 'source': source, 'content': content}
     docs.append(doc)
 
   # Add docs
-  print "Adding..."
-  putDocs(docs)
+  addDocs(docs)
 
 def delXml(fileName):
   print "Reading file %s" % fileName
@@ -138,7 +151,9 @@ if __name__ == '__main__':
         for root, _, files in os.walk(arg):
           for fi in files:
             if fi.endswith(".xml"):
-              addXml(os.path.join(root,fi))
+              addXml(os.path.join(root,fi),"xml")
+            if fi.endswith(".xml.meta"):
+              addXml(os.path.join(root,fi),"xml.meta")
       if opt == "--del":
         for root, _, files in os.walk(arg):
           for fi in files:
