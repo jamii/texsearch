@@ -81,9 +81,11 @@ def addXml(fileName, type):
     publicationYear = xml.getElementsByTagName("PrintDate")[0].getElementsByTagName("Year")[0].childNodes[0].wholeText
   elif xml.getElementsByTagName("CoverDate"): 
     publicationYear = xml.getElementsByTagName("CoverDate")[0].getElementsByTagName("Year")[0].childNodes[0].wholeText
+  elif xml.getElementsByTagName("OnlineDate"): 
+    publicationYear = xml.getElementsByTagName("OnlineDate")[0].getElementsByTagName("Year")[0].childNodes[0].wholeText
   else:
-    print "No PrintDate or CoverDate found!"
-    sys.exit(2)
+    print "Note: no publication year"
+    publicationYear = None
 
   # Collect docs
   docs = []
