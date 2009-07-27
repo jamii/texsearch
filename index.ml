@@ -181,8 +181,8 @@ let handle_query bktree str =
       let query = Query.of_string (preprocess preprocessorTimeout) args#searchTerm in
       let filter document = 
             ((args#journalID = None) || (args#journalID = Some document#journalID))
-        &&  ((args#publishedBefore = None) || (args#publishedBefore >= document#publicationYear))
-        &&  ((args#publishedAfter  = None) || (args#publishedAfter  <= document#publicationYear)) in
+        &&  ((args#publishedBefore = None) || ((args#publishedBefore >= document#publicationYear) && (document#publicationYear != None)))
+        &&  ((args#publishedAfter  = None) || ((args#publishedAfter  <= document#publicationYear) && (document#publicationYear != None))) in
       let search_results = 
         with_timeout searchTimeout (fun _ ->
           match args#doi with
@@ -218,7 +218,7 @@ let batch_size = 100
 let get_update_batch last_update =
   flush_line
     ("Fetching updates from " ^
-    (string_of_int last_update) ^
+    (string_of_int (last_update+1)) ^
     " onwards");
   let url =
     db_url ^ "_all_docs_by_seq?include_docs=true" ^
@@ -248,7 +248,7 @@ let run_update index update =
     raise (FailedUpdate (update#key, update#id))
 
 let rec run_update_batches index =
-  let update_batch = get_update_batch (index.last_update+1) in
+  let update_batch = get_update_batch index.last_update in
   flush_line "Updating...";
   let index = List.fold_left run_update index update_batch in
   flush_line "Saving index";
