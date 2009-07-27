@@ -19,7 +19,7 @@ and id = string
 
 and document =
   < journalID : string 
-  ; publicationYear : string 
+  ; publicationYear : string option
   ; content : (string * Latex.t) assoc (* id*Latex.t *)
   ; source : (string * string) assoc > (* id*string *)
 
@@ -181,8 +181,8 @@ let handle_query bktree str =
       let query = Query.of_string (preprocess preprocessorTimeout) args#searchTerm in
       let filter document = 
             ((args#journalID = None) || (args#journalID = Some document#journalID))
-        &&  ((args#publishedBefore = None) || (args#publishedBefore >= Some document#publicationYear))
-        &&  ((args#publishedAfter  = None) || (args#publishedAfter  <= Some document#publicationYear)) in
+        &&  ((args#publishedBefore = None) || (args#publishedBefore >= document#publicationYear))
+        &&  ((args#publishedAfter  = None) || (args#publishedAfter  <= document#publicationYear)) in
       let search_results = 
         with_timeout searchTimeout (fun _ ->
           match args#doi with
