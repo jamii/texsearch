@@ -117,8 +117,10 @@ def addXml(fileName, type):
         renderer = JsonRenderer()
         render(preprocessed,renderer)
         content[eqnID] = renderer.dumps()
+      except KeyboardInterrupt, e:
+        raise e
       except Exception, e:
-        print "Preprocessor failed on equation %s : %s" % (eqnID, e)
+        print "Note: Preprocessor failed on equation %s : %s" % (eqnID, e)
 
     doc = {'_id': encodeDoi(doi), 'journalID': journalID, 'publicationYear': publicationYear, 'type':type, 'source': source, 'content': content}
     docs.append(doc)
@@ -149,6 +151,8 @@ import os, os.path, getopt
 if __name__ == '__main__':
   try:
     opts, args = getopt.getopt(sys.argv[1:], "", ["add=", "del=", "init"])
+    errors = []
+
     for opt, arg in opts:
       if opt == "--init":
         initDB()
@@ -156,15 +160,28 @@ if __name__ == '__main__':
         for root, _, files in os.walk(arg):
           for fi in files:
             if fi.endswith(".xml"):
-              addXml(os.path.join(root,fi),"xml")
-            if fi.endswith(".xml.metadata"):
-              addXml(os.path.join(root,fi),"xml.metadata")
+              try:
+                addXml(os.path.join(root,fi),"xml")      
+              except KeyboardInterrupt, e:
+                raise e
+              except Exception, exc:
+                print exc
+                errors.append((os.path.join(root,fi),exc))
+            #if fi.endswith(".xml.metadata"):
+            #  addXml(os.path.join(root,fi),"xml.metadata")
       if opt == "--del":
         for root, _, files in os.walk(arg):
           for fi in files:
             if fi.endswith(".xml"):
               delXml(os.path.join(root,fi))
-    print "Ok"
+    if errors:
+      print "Errors occurred whilst processing the following files:"
+      for (fi,exc) in errors:
+        print fi
+        print exc
+    else:
+      print "Ok"
+
   except getopt.GetoptError:
     usage()
     sys.exit(2)
