@@ -1,0 +1,6 @@
+#!/bin/bash
+dir=$(dirname $0)
+python $dir/db.py --add=$1
+$dir/index -update
+$dir/stop
+$dir/start

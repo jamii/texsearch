@@ -1,0 +1,4 @@
+#!/bin/bash
+dir=$(dirname $0)
+$dir/index -init
+python $dir/db.py --init

@@ -1,0 +1,3 @@
+#!/bin/bash
+dir=$(dirname $0)
+couchdb -p $dir/run/couchdb.pid -d

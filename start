@@ -1,0 +1,3 @@
+#!/bin/bash
+dir=$(dirname $0)
+couchdb -b -c $dir/db.ini -p $dir/run/couchdb.pid
