@@ -188,7 +188,7 @@ def main():
           timeout = 5
         signal.alarm(timeout)    
    
-        result = preprocess("\\begin{document} " + query['latex'] + " \\end{document}")
+        result = preprocess("\\begin{document} $$" + query['latex'] + "$$ \\end{document}")
 
         if format == 'json-plain':
           jsonRenderer = JsonRenderer()
