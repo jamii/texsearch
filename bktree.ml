@@ -66,35 +66,54 @@ module IntMap = Map.Make (struct
   let compare = compare
 end)
 
-(* A tree node. The root_deleted field allows deleting documents from the index without rebalancing the tree
-   If deletions are more common than expected this may need to be changed *)
+(* A bk cover tree *)
 type bktree =
   { root : node
-  ; root_deleted : bool
   ; children : bktree IntMap.t }
+
+let rec size bktree = 1 + (IntMap.fold (fun _ child total -> total + size child) bktree.children 0)
 
 (* A dummy node sits at the top of the tree. *)
 let empty =
   { root = node_of "" [("",Latex.empty ())]
-  ; root_deleted = true
   ; children = IntMap.empty }
 
 let empty_branch node =
   { root = node
-  ; root_deleted = false
   ; children = IntMap.empty }
 
 let rec add node bktree =
   let d = index_dist node.equations bktree.root.equations in
-  try
-    add node (IntMap.find d bktree.children)
-  with Not_found ->
-    {bktree with children = IntMap.add d (empty_branch node) bktree.children}
+  let children =
+    try
+      IntMap.add d (add node (IntMap.find d bktree.children)) bktree.children
+    with Not_found ->
+      IntMap.add d (empty_branch node) bktree.children in
+  {bktree with children=children}
+
+let rec descendants bktree =
+  IntMap.fold (fun _ child nodes -> child.root :: (List.append (descendants child) nodes)) bktree.children []
 
 let rec delete doi bktree =
-  let children = IntMap.map (fun child -> delete doi child) bktree.children in
-  let root_deleted = (bktree.root.doi = doi) in
-  {bktree with root_deleted = root_deleted; children = children}
+  (* Remove each child which matches the doi and make a list of the removed children *)
+  let (children,deletees) = 
+    IntMap.fold
+      (fun dist child (children,deletees) ->
+        if child.root.doi = doi
+        then (children, child::deletees)
+        else (IntMap.add dist (delete doi child) children, deletees))
+      bktree.children
+      (IntMap.empty,[]) in
+  (* Some descendants of the the removed children might need be added back in *)
+  List.fold_left
+    (fun bktree child -> 
+      let addable_descendants = List.filter (fun node -> node.doi != doi) (descendants child) in
+      List.fold_left 
+        (fun bktree descendant -> add descendant bktree)
+        bktree
+        addable_descendants)
+    {root=bktree.root; children=children}
+    deletees
 
 type result = doi * ((id * int) list)
 
@@ -127,9 +146,9 @@ type search =
 exception Broken
 
 (* Query a document node, update the search structure, return the min distance from the query *)
-let query_node search node node_deleted =
+let query_node search node =
   let (dist,matches) = query_against search.query node.equations search.cutoff in
-  if dist < search.cutoff && not node_deleted
+  if dist < search.cutoff
   then search.results.(dist) <- (node.doi,matches) :: search.results.(dist)
   else ();
   if dist < search.min_dist
@@ -195,7 +214,7 @@ let run_search k search =
             Util.take k !results
         (* Search in bktree *)
         | Some bktree ->
-            let dist = query_node search bktree.root bktree.root_deleted in
+            let dist = query_node search bktree.root in
             IntMap.iter
               (fun i node ->
                 (* d is a lower bound for the distance to node, based on the triangle inequality *)
