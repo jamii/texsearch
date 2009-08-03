@@ -70,8 +70,8 @@ end)
    If deletions are more common than expected this may need to be changed *)
 type bktree =
   { root : node
-  ; mutable root_deleted : bool
-  ; mutable children : bktree IntMap.t }
+  ; root_deleted : bool
+  ; children : bktree IntMap.t }
 
 (* A dummy node sits at the top of the tree. *)
 let empty =
@@ -89,11 +89,12 @@ let rec add node bktree =
   try
     add node (IntMap.find d bktree.children)
   with Not_found ->
-    bktree.children <- IntMap.add d (empty_branch node) bktree.children
+    {bktree with children = IntMap.add d (empty_branch node) bktree.children}
 
 let rec delete doi bktree =
-  if bktree.root.doi = doi then bktree.root_deleted <- true else ();
-  IntMap.iter (fun _ child -> delete doi child) bktree.children
+  let children = IntMap.map (fun child -> delete doi child) bktree.children in
+  let root_deleted = (bktree.root.doi = doi) in
+  {bktree with root_deleted = root_deleted; children = children}
 
 type result = doi * ((id * int) list)
 

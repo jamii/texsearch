@@ -235,15 +235,16 @@ exception FailedUpdate of int * doi
 
 let run_update index update =
   try
-    Bktree.delete update#id index.bktree;
-    if not (update#value#deleted)
-    then
-      let doc = document_of_json update#doc in
-      if List.length doc#content > 0
-      then Bktree.add (Bktree.node_of update#id doc#content) index.bktree
-      else ()
-    else ();
-    {index with last_update=update#key}
+    let bktree = Bktree.delete update#id index.bktree in
+    let bktree =
+      if not (update#value#deleted)
+      then
+        let doc = document_of_json update#doc in
+        if List.length doc#content > 0
+        then Bktree.add (Bktree.node_of update#id doc#content) index.bktree
+        else bktree
+      else bktree in
+    {last_update=update#key; bktree=bktree}
   with _ ->
     raise (FailedUpdate (update#key, update#id))
 
