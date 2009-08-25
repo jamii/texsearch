@@ -171,6 +171,18 @@ let run_full_query bktree limit filter query =
   then LimitExceeded
   else Results (Util.filter_map (get_result filter) results)
 
+let sort_results results =
+  let weighted_results = 
+    List.map 
+      (fun (doi,eqns) -> 
+        let weight = Util.minimum (List.map snd eqns) in
+        let sorted_eqns = List.sort (fun a b -> compare (snd a) (snd b)) eqns in
+        (weight,(doi,sorted_eqns)))
+    results in
+  let sorted_weighted_results = 
+    List.sort (fun a b -> compare (fst a) (fst b)) weighted_results in
+  List.map snd sorted_weighted_results
+
 let handle_query bktree str =
   let response =
     try
@@ -189,9 +201,9 @@ let handle_query bktree str =
             | Some doi -> run_single_query (encode_doi doi) filter query (* Search within a single article *)
             | None -> run_full_query bktree limit filter query (* Search within all articles *)) in
       match (search_results, args#format) with
-        | (Results results, "xml") -> xml_response results (Query.to_string query)
+        | (Results results, "xml") -> xml_response (sort_results results) (Query.to_string query)
         | (LimitExceeded, "xml") -> xml_limit_response
-        | (Results results, "json") -> json_response results (Query.to_string query)
+        | (Results results, "json") -> json_response (sort_results results) (Query.to_string query)
         | (LimitExceeded, "json") -> json_limit_response
     with
       | Json_type.Json_error _ | Failure _ | Query.Parse_error ->
