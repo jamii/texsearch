@@ -6,8 +6,8 @@ Mostly I/O and error handling.
 module Http = Http_client.Convenience
 let encode url = Netencoding.Url.encode ~plus:false url
 
-let encodeDoi doi = Str.global_replace (Str.regexp "/") "_" doi
-let decodeDoi doi = Str.global_replace (Str.regexp "_") "/" doi
+let encode_doi doi = Str.global_replace (Str.regexp "/") "_" doi
+let decode_doi doi = Str.global_replace (Str.regexp "_") "/" doi
 
 let flush_line str = print_string str; print_string "\n"; flush stdout
 
@@ -110,7 +110,7 @@ let xml_of_results results query_string =
     Xml.Element ("equation", [("distance",string_of_int weight)], [Xml.PCData source]) in
   let xml_of_result (doi,eqns) =
     Xml.Element ("result", 
-      [("doi", decodeDoi doi);("count", string_of_int (List.length eqns))], 
+      [("doi", decode_doi doi);("count", string_of_int (List.length eqns))], 
       (List.map xml_of_eqn eqns)) in
   let xml_of_query_string =
     Xml.Element ("query",[],[Xml.PCData query_string]) in
@@ -156,7 +156,7 @@ let get_result filter (doi,ids) =
   if filter doc
   then 
     let weighted_source = List.map (fun (id,weight) -> (List.assoc id doc#source, weight)) ids in
-    Some (decodeDoi doi, weighted_source)
+    Some (decode_doi doi, weighted_source)
   else
     None
 
@@ -186,7 +186,7 @@ let handle_query bktree str =
       let search_results = 
         with_timeout searchTimeout (fun _ ->
           match args#doi with
-            | Some doi -> run_single_query (encodeDoi doi) filter query (* Search within a single article *)
+            | Some doi -> run_single_query (encode_doi doi) filter query (* Search within a single article *)
             | None -> run_full_query bktree limit filter query (* Search within all articles *)) in
       match (search_results, args#format) with
         | (Results results, "xml") -> xml_response results (Query.to_string query)
@@ -284,12 +284,37 @@ let init_index () =
   else
     flush_line "Ok, nothing was done"
 
+(* Introspection *)
+
+module DoiMap = Bktree.DoiMap
+
+let list_all () =
+  flush_line "Loading index";
+  let index = load_index () in
+  DoiMap.iter
+    (fun doi eqns -> 
+      flush_line ((decode_doi doi) ^ " (" ^ (string_of_int (List.length eqns)) ^ " eqns)"))
+    (Bktree.doi_map index.bktree)
+
+let list_one doi =
+  flush_line "Loading index";
+  let index = load_index () in
+  flush_line ("Searching for " ^ doi);
+  try
+    let eqns = DoiMap.find (encode_doi doi) (Bktree.doi_map index.bktree) in
+    flush_line "DOI indexed with equation ids:";
+    List.iter (fun (id,_) -> flush_line id) eqns
+  with Not_found ->
+    flush_line "DOI not indexed"
+
 (* Main *)
 
 open Arg
 let _ = parse
   [("-init", Unit init_index, ": Create an empty index")
   ;("-update", Unit run_updates, ": Update the index")
-  ;("-query", Unit handle_queries, ": Handle index queries as a couchdb _external")]
+  ;("-query", Unit handle_queries, ": Handle index queries as a couchdb _external")
+  ;("-list_all", Unit list_all, ": List all indexed keys")
+  ;("-list", String list_one, ": List the entry for a given key")]
   ignore
   "Use 'index -help' for available options"

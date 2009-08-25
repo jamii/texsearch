@@ -14,14 +14,24 @@ This is the crucial fact that allows efficient searching within the tree.
 type doi = string
 type id = string
 
+module DoiMap = Map.Make (struct
+  type t = doi
+  let compare = compare
+end)
+
+module IntMap = Map.Make (struct
+  type t = int
+  let compare = compare
+end)
+
 (* A single equation *)
 type node =
   { doi : doi
   ; equation : id * Latex.t }
 
 let node_of doi equation =
-    { doi = doi
-    ; equation = equation }
+  { doi = doi
+  ; equation = equation }
 
 (* Extending the edit distance on latex strings to edit distance on compound queries *)
 
@@ -40,11 +50,6 @@ and query_dist_not query latex =
     | And (query1,query2) -> min (query_dist_not query1 latex) (query_dist_not query2 latex)
     | Or (query1,query2) -> max (query_dist_not query1 latex) (query_dist_not query2 latex)
     | Not query -> query_dist query latex
-
-module IntMap = Map.Make (struct
-  type t = int
-  let compare = compare
-end)
 
 (* Return each equation whose distance to the query is less than the cutoff, as well as the min distance *)
 let query_against query equations cutoff =
@@ -109,7 +114,17 @@ let rec delete doi bktree =
     {root=bktree.root; children=children}
     deletees
 
-type result = doi * (id * int)
+(* Simple introspection *)
+
+let doi_map bktree =
+  List.fold_left
+    (fun doi_map node ->
+      try
+        DoiMap.add node.doi (node.equation :: DoiMap.find node.doi doi_map) doi_map
+      with Not_found ->
+        DoiMap.add node.doi [node.equation] doi_map) 
+    DoiMap.empty
+    (descendants bktree)
 
 (*
 The search structure tracks the progress of a search through a tree.
@@ -129,10 +144,7 @@ no as-yet-unsearched results will match more closely than these
 so if the number of results required is less than the size search.safe_results of it is safe to stop searching
 *)
 
-module DoiMap = Map.Make (struct
-  type t = doi
-  let compare = compare
-end)
+type result = doi * (id * int)
 
 type search =
   { query : Query.t
