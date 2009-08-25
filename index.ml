@@ -293,7 +293,7 @@ let list_all () =
   let index = load_index () in
   DoiMap.iter
     (fun doi eqns -> 
-      flush_line ((decode_doi doi) ^ " (" ^ (string_of_int (List.length eqns)) ^ " eqns)"))
+      flush_line ((decode_doi doi) ^ " (" ^ (string_of_int (List.length eqns)) ^ " equations)"))
     (Bktree.doi_map index.bktree)
 
 let list_one doi =
