@@ -14,14 +14,14 @@ This is the crucial fact that allows efficient searching within the tree.
 type doi = string
 type id = string
 
-(* A single document *)
+(* A single equation *)
 type node =
   { doi : doi
-  ; equations : (id * Latex.t) list }
+  ; equation : id * Latex.t }
 
-let node_of doi equations =
+let node_of doi equation =
     { doi = doi
-    ; equations = equations }
+    ; equation = equation }
 
 (* Extending the edit distance on latex strings to edit distance on compound queries *)
 
@@ -41,6 +41,11 @@ and query_dist_not query latex =
     | Or (query1,query2) -> max (query_dist_not query1 latex) (query_dist_not query2 latex)
     | Not query -> query_dist query latex
 
+module IntMap = Map.Make (struct
+  type t = int
+  let compare = compare
+end)
+
 (* Return each equation whose distance to the query is less than the cutoff, as well as the min distance *)
 let query_against query equations cutoff =
   let (min_dist, ranked_equations) = 
@@ -52,20 +57,6 @@ let query_against query equations cutoff =
       equations in
   (min_dist, List.sort (fun a b -> compare (snd a) (snd b)) ranked_equations)
 
-(* index_dist b c = min_i max_j (left_edit_dist b_j c_i)
-   the right half of the bounding equation at the top of the page *)
-let index_dist bl cl =
-  Util.minimum (List.map (fun (_,c) ->
-    Util.maximum (List.map (fun (_,b) ->
-      Edit.left_edit_distance b c)
-    bl))
-  cl)
-
-module IntMap = Map.Make (struct
-  type t = int
-  let compare = compare
-end)
-
 (* A bk cover tree *)
 type bktree =
   { root : node
@@ -75,15 +66,18 @@ let rec size bktree = 1 + (IntMap.fold (fun _ child total -> total + size child)
 
 (* A dummy node sits at the top of the tree. *)
 let empty =
-  { root = node_of "" [("",Latex.empty ())]
+  { root = node_of "" ("",Latex.empty ())
   ; children = IntMap.empty }
 
 let empty_branch node =
   { root = node
   ; children = IntMap.empty }
 
+let to_bucket d = d / 3
+let from_bucket d = (d + 1) * 3
+
 let rec add node bktree =
-  let d = index_dist node.equations bktree.root.equations in
+  let d = to_bucket (Edit.left_edit_distance (snd node.equation) (snd bktree.root.equation)) in
   let children =
     try
       IntMap.add d (add node (IntMap.find d bktree.children)) bktree.children
@@ -115,7 +109,7 @@ let rec delete doi bktree =
     {root=bktree.root; children=children}
     deletees
 
-type result = doi * ((id * int) list)
+type result = doi * (id * int)
 
 (*
 The search structure tracks the progress of a search through a tree.
@@ -130,29 +124,31 @@ so every document node remaining in the search has distance >= min_dist.
 search.results stores matches for the query.
 search.results.(i) contains matches with dist i from the query.
 
-search.safe_results stores the number of results with distance < min_dist.
+search.safe_results stores the doi for each article which has an equation with distance < min_dist.
 no as-yet-unsearched results will match more closely than these
-so if the number of results required is less than search.safe_results it is safe to stop searching
+so if the number of results required is less than the size search.safe_results of it is safe to stop searching
 *)
+
+module DoiMap = Map.Make (struct
+  type t = doi
+  let compare = compare
+end)
 
 type search =
   { query : Query.t
   ; cutoff : int
   ; unsearched : bktree list array
   ; results : result list array
-  ; mutable safe_results : int
+  ; mutable safe_results : ((id*int) list) DoiMap.t
   ; mutable min_dist : int }
 
 exception Broken
 
 (* Query a document node, update the search structure, return the min distance from the query *)
 let query_node search node =
-  let (dist,matches) = query_against search.query node.equations search.cutoff in
+  let dist = query_dist search.query (snd node.equation) in
   if dist < search.cutoff
-  then search.results.(dist) <- (node.doi,matches) :: search.results.(dist)
-  else ();
-  if dist < search.min_dist
-  then (*search.safe_results <- search.safe_results + 1*) raise Broken
+  then search.results.(dist) <- (node.doi,(fst node.equation, dist)) :: search.results.(dist)
   else ();
   dist
 
@@ -167,7 +163,15 @@ let rec pop_search_node search =
   match search.unsearched.(search.min_dist) with
     | [] ->
       (* Nothing left at this distance *)
-      search.safe_results <- search.safe_results + List.length(search.results.(search.min_dist));
+      search.safe_results <- 
+        List.fold_left 
+          (fun safe_results (doi,eqn) -> 
+            try
+              DoiMap.add doi (eqn :: DoiMap.find doi safe_results) safe_results
+            with Not_found ->
+              DoiMap.add doi [eqn] safe_results) 
+          search.safe_results
+          search.results.(search.min_dist);
       search.min_dist <- search.min_dist + 1;
       pop_search_node search
     | (bktree::rest) ->
@@ -186,7 +190,7 @@ let new_search query bktree =
     ; cutoff = cutoff
     ; unsearched = Array.make cutoff []
     ; results = Array.make cutoff []
-    ; safe_results = 0
+    ; safe_results = DoiMap.empty
     ; min_dist = 0 } in
   push_search_node search bktree 0;
   search
@@ -194,31 +198,34 @@ let new_search query bktree =
 (* Runs search until at least k results can be returned *)
 let run_search k search =
   let rec loop () =
-    if search.safe_results >= k
+    if (DoiMap.fold (fun _ _ total -> 1 + total) search.safe_results 0) >= k
     then
       (* We have enough results to return *)
-      let results = ref [] in
-      for i = search.min_dist - 1 downto 0 do
-        results := search.results.(i) @ !results
-      done;
-      Util.take k !results
+      DoiMap.fold (fun doi eqns acc -> (doi,eqns)::acc) search.safe_results []
     else
       (* We need to carry on searching *)
       match pop_search_node search with
         (* Nothing left to search, return results *)
         | None ->
-            let results = ref [] in
-            for i = search.cutoff - 1 downto 0 do
-              results := search.results.(i) @ !results
+            for i = search.cutoff - 1 downto search.min_dist do
+              search.safe_results <- 
+                List.fold_left 
+                  (fun safe_results (doi,eqn) -> 
+                    try
+                      DoiMap.add doi (eqn :: DoiMap.find doi safe_results) safe_results
+                    with Not_found ->
+                      DoiMap.add doi [eqn] safe_results) 
+                  search.safe_results
+                  search.results.(i)
             done;
-            Util.take k !results
+            Util.take k (DoiMap.fold (fun doi eqns acc -> (doi,eqns)::acc) search.safe_results [])
         (* Search in bktree *)
         | Some bktree ->
             let dist = query_node search bktree.root in
             IntMap.iter
               (fun i node ->
                 (* d is a lower bound for the distance to node, based on the triangle inequality *)
-                let d = max search.min_dist (dist-i) in
+                let d = max search.min_dist (dist-(from_bucket i)) in
                 push_search_node search node d)
               bktree.children;
             loop () in

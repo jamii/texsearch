@@ -241,7 +241,11 @@ let run_update index update =
       then
         let doc = document_of_json update#doc in
         if List.length doc#content > 0
-        then Bktree.add (Bktree.node_of update#id doc#content) bktree
+        then 
+          List.fold_left 
+            (fun bktree eqn -> Bktree.add (Bktree.node_of update#id eqn) bktree)
+            bktree
+            doc#content
         else bktree
       else bktree in
     {last_update=update#key; bktree=bktree}
