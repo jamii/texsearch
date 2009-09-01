@@ -37,7 +37,7 @@ def addDocs(docs):
     if response.status == 200: 
       # Entry already exists
       oldDoc = json.loads(response.read())
-      if (doc['type'] == 'xml.metadata') and (oldDoc['type'] == 'xml'):
+      if (doc['type'] == 'xml.meta') and (oldDoc['type'] == 'xml'):
         # Full document has stricly more information than the meta 
         print "Full entry already exists, not overwriting with meta"
       else:
@@ -159,16 +159,19 @@ if __name__ == '__main__':
       if opt == "--add":
         for root, _, files in os.walk(arg):
           for fi in files:
-            if fi.endswith(".xml"):
+            fileType = ""
+            if fi.lower().endswith(".xml"):
+              fileType = "xml"
+            elif fi.lower().endswith(".xml.meta"):
+              fileType = "xml.meta"
+            if fileType:
               try:
-                addXml(os.path.join(root,fi),"xml")      
+                addXml(os.path.join(root,fi),fileType)      
               except KeyboardInterrupt, e:
                 raise e
               except Exception, exc:
                 print exc
                 errors.append((os.path.join(root,fi),exc))
-            #if fi.endswith(".xml.metadata"):
-            #  addXml(os.path.join(root,fi),"xml.metadata")
       if opt == "--del":
         for root, _, files in os.walk(arg):
           for fi in files:
