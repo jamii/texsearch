@@ -314,7 +314,8 @@ let list_one doi =
   flush_line ("Searching for " ^ doi);
   try
     let eqns = DoiMap.find (encode_doi doi) (Bktree.doi_map index.bktree) in
-    flush_line "DOI indexed with equation ids:";
+    let journalID = (get_document (encode_doi doi))#journalID in
+    flush_line ("DOI indexed with journal ID: " ^ journalID ^ " and equation ids:");
     List.iter (fun (id,_) -> flush_line id) eqns
   with Not_found ->
     flush_line "DOI not indexed"
