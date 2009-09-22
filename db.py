@@ -77,12 +77,9 @@ def addXml(fileName, type):
 
   journalID = xml.getElementsByTagName("JournalID")[0].childNodes[0].wholeText
 
-  if xml.getElementsByTagName("PrintDate"):
-    publicationYear = xml.getElementsByTagName("PrintDate")[0].getElementsByTagName("Year")[0].childNodes[0].wholeText
-  elif xml.getElementsByTagName("CoverDate"): 
-    publicationYear = xml.getElementsByTagName("CoverDate")[0].getElementsByTagName("Year")[0].childNodes[0].wholeText
-  elif xml.getElementsByTagName("OnlineDate"): 
-    publicationYear = xml.getElementsByTagName("OnlineDate")[0].getElementsByTagName("Year")[0].childNodes[0].wholeText
+  publicationDate = xml.getElementsByTagName("PrintDate") or xml.getElementsByTagName("CoverDate") or xml.getElementsByTagName("OnlineDate")
+  if publicationDate:
+    publicationYear = publicationDate[0].getElementsByTagName("Year")[0].childNodes[0].wholeText
   else:
     print "Note: no publication year"
     publicationYear = None
