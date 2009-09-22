@@ -141,6 +141,9 @@ def renderChildren(node,renderer):
 from plasTeX.TeX import TeX
 from plasTeX.Base.TeX.Primitives import MathShift
 
+def isMathMode(obj):
+  return True
+
 def preprocess(string):
   # PlasTeX bug - this variable doent get reinitialised
   MathShift.inEnv = []
@@ -148,6 +151,8 @@ def preprocess(string):
   # Instantiate a TeX processor and parse the input text
   tex = TeX()
   tex.disableLogging()
+  # Override plasTeX's buggy handling of mathmode, since we dont need textmode
+  tex.ownerDocument.context.isMathMode = isMathMode
   tex.input(string)
   return tex.parse()
 
