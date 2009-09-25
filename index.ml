@@ -39,7 +39,7 @@ and update =
   < id : doi
   ; key : int
   ; value : < ?deleted : bool = false >
-  ; doc : Json_type.t >
+  ; ?doc : Json_type.t option >
 
 and updates =
   < rows : update list >
@@ -249,17 +249,17 @@ let run_update index update =
   try
     let bktree = Bktree.delete update#id index.bktree in
     let bktree =
-      if not (update#value#deleted)
-      then
-        let doc = document_of_json update#doc in
-        if List.length doc#content > 0
-        then 
-          List.fold_left 
-            (fun bktree eqn -> Bktree.add (Bktree.node_of update#id eqn) bktree)
-            bktree
-            doc#content
-        else bktree
-      else bktree in
+      match (update#value#deleted, update#doc) with
+        | (_, None) | (true, _) -> bktree
+        | (false, Some json) ->
+            let doc = document_of_json json in
+            if List.length doc#content > 0
+            then 
+              List.fold_left 
+                (fun bktree eqn -> Bktree.add (Bktree.node_of update#id eqn) bktree)
+                bktree
+                doc#content
+            else bktree in
     {last_update=update#key; bktree=bktree}
   with _ ->
     raise (FailedUpdate (update#key, update#id))
