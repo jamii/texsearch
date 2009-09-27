@@ -60,21 +60,21 @@ type index =
 
 let load_index () =
   try
-    let index_file = open_in_bin "/opt/texsearch/index_store" in
+    let index_file = open_in_bin "./index_store" in
     let index = (Marshal.from_channel index_file : index) in
     close_in index_file; index
   with _ ->
-    flush_line "Could not open file /opt/texsearch/index_store";
+    flush_line "Error opening file ./index_store";
     raise Exit
 
 let save_index index =
   try
-    let index_file = open_out_bin "/opt/texsearch/index_store_tmp" in
+    let index_file = open_out_bin "./index_store_tmp" in
     Marshal.to_channel index_file index [Marshal.No_sharing];
     close_out index_file;
-    Unix.rename "/opt/texsearch/index_store_tmp" "/opt/texsearch/index_store"
+    Unix.rename "./index_store_tmp" "./index_store"
   with _ ->
-    flush_line "Could not save to file /opt/texsearch/index_store";
+    flush_line "Error saving to file ./index_store";
     raise Exit
 
 (* Database interaction *)
