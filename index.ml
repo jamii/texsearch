@@ -323,11 +323,13 @@ let list_one doi =
 (* Main *)
 
 open Arg
-let _ = parse
-  [("-init", Unit init_index, ": Create an empty index")
-  ;("-update", Unit run_updates, ": Update the index")
-  ;("-query", Unit handle_queries, ": Handle index queries as a couchdb _external")
-  ;("-list_all", Unit list_all, ": List all indexed keys")
-  ;("-list", String list_one, ": List the entry for a given key")]
-  ignore
-  "Use 'index -help' for available options"
+let _ = 
+  flush_line "Note: Be sure to call this program from the texsearch directory";
+  parse
+    [("-init", Unit init_index, ": Create an empty index")
+    ;("-update", Unit run_updates, ": Update the index")
+    ;("-query", Unit handle_queries, ": Handle index queries as a couchdb _external")
+    ;("-list_all", Unit list_all, ": List all indexed keys")
+    ;("-list", String list_one, ": List the entry for a given key")]
+    ignore
+    "Use 'index -help' for available options"
