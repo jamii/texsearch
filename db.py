@@ -1,78 +1,75 @@
 #!/usr/bin/env python
 import sys, httplib, urllib
 from xml.dom import minidom
-from preprocessor import preprocess, render, JsonRenderer
-import simplejson as json
-from util import expectResponse, encodeDoi
+import preprocessor
+from util import encodeDoi
+import couchdb.client
 
-couchdb = "localhost:5984"
+couchdb = couchdb.client.Server('http://localhost:5984/')
+db = couchdb['documents']
 
-def initDB():
-  # Warn user
-  response = raw_input("This will erase the texsearch database. Are you sure? (y/n):")
+def preprocess(latex):
+  preprocessed = preprocessor.preprocess("\\begin{document} " + latex + " \\end{document}")
+  renderer = preprocessor.JsonRenderer()
+  preprocessor.render(preprocessed,renderer)
+  return renderer.dumps()
+
+def confirm(prompt):
+  response = raw_input(prompt + " (y/n):")
   if response != 'y':
     print "Ok, nothing was done"
     sys.exit(0)
 
-  conn = httplib.HTTPConnection(couchdb)
+# Initial configuration of the database
+
+def initDB():
+  confirm("This will erase the texsearch database. Are you sure?")
 
   print "Deleting existing databases"
-  conn.request("DELETE", "/documents")
-  conn.getresponse().read()
+  del couchdb['documents']
 
   print "Creating new databases"
-  conn.request("PUT", "/documents")
-  expectResponse(conn,201)
+  couchdb.create['documents']
 
-  conn.close()
+# Parsing and preprocessing xml articles
 
-def addDocs(docs):
-  conn = httplib.HTTPConnection(couchdb)
+def parseEquation(eqn):
+  eqnID = eqn.attributes.get('ID').value
+  try:
+    eqnSource = eqn.getElementsByTagName("EquationSource")[0]
+    if eqnSource.attributes.get('Format').value == "TEX":
+      latex = eqnSource.childNodes[0].wholeText
+      equations[latex] = eqnID
+  except IndexError:
+    print ("Note: no equation source for eqn %s" % eqnID)
+    eqnSource = None
+  except AttributeError:
+    print ("Note: missing format attribute for eqn %s" % eqnID)
+    eqnSource = None
+  return (eqnSource, eqnID)
 
-  for doc in docs:
-    conn.request("GET", "/documents/%s" % doc['_id'])
+def parseArticle(article):
+  doi = article.getElementsByTagName("ArticleDOI")[0].childNodes[0].wholeText
+  print ("Parsing article %s" % doi)
+    
+  equations = [parseEquation(eqn) for eqn in article.getElementsByTagName("Equation") + article.getElementsByTagName("InlineEquation")]
+  # Eliminate duplicate equations (key is eqnSource)
+  equations = dict(equations).items()
 
-    response = conn.getresponse()
+  source = {}
+  content = {}
+  for latex, eqnID in equations.items():
+    try:
+      source[eqnID] = latex 
+      content[eqnID] = preprocess(latex)
+    except KeyboardInterrupt, e:
+      raise e
+    except Exception, e:
+      print "Note: Preprocessor failed on equation %s : %s" % (eqnID, e)
 
-    if response.status == 200: 
-      # Entry already exists
-      oldDoc = json.loads(response.read())
-      if (doc['type'] == 'xml.meta') and (oldDoc['type'] == 'xml'):
-        # Full document has stricly more information than the meta 
-        print "Full entry already exists, not overwriting with meta"
-      else:
-        # Safe to overwrite
-        print "Overwriting existing entry"
-        doc['_rev'] = oldDoc['_rev']
-        conn.request("PUT", "/documents/%s" % doc['_id'], json.dumps(doc))
-        expectResponse(conn,201)
-    elif response.status == 404:
-      # No existing entry
-      print "Adding new entry"
-      response.read() # Clear the response
-      conn.request("PUT", "/documents/%s" % doc['_id'], json.dumps(doc))
-      expectResponse(conn,201)
-    else:
-      raise UnexpectedResponse(200,response.status)
+  return {'_id': encodeDoi(doi), 'source': source, 'content': content}
 
-  conn.close()
-
-def delDocs(docs):
-  conn = httplib.HTTPConnection(couchdb)
-
-  for doc in docs:
-    conn.request("GET", "/documents/%s" % doc['_id'])
-
-    revision = json.loads(expectResponse(conn,200))['_rev']
-    conn.request("DELETE", "/documents/%s?rev=%s" % (doc['_id'], revision))
-
-  conn.close()
-
-# Bulk process a xml document
-def addXml(fileName, type):
-  conn = httplib.HTTPConnection(couchdb)
-
-  print "Reading file %s" % fileName
+def parseFile(fileName):
   xml = minidom.parse(fileName)
 
   journalID = xml.getElementsByTagName("JournalID")[0].childNodes[0].wholeText
@@ -84,96 +81,104 @@ def addXml(fileName, type):
     print "Note: no publication year"
     publicationYear = None
 
-  # Collect docs
-  docs = []
-  for article in xml.getElementsByTagName("Article"):
-    doi = article.getElementsByTagName("ArticleDOI")[0].childNodes[0].wholeText
-    print ("Parsing article %s" % doi)
-    
-    # Collect equation sources, ignoring duplicates
-    equations = {}
-    for eqn in article.getElementsByTagName("Equation") + article.getElementsByTagName("InlineEquation"):
-      eqnID = eqn.attributes.get('ID').value
-      try:
-        eqnSource = eqn.getElementsByTagName("EquationSource")[0]
-        if eqnSource.attributes.get('Format').value == "TEX":
-          latex = eqnSource.childNodes[0].wholeText
-          equations[latex] = eqnID
-      except IndexError:
-        print ("Note: no equation source for eqn %s" % eqnID)
-      except AttributeError:
-        print ("Note: missing format attribute for eqn %s" % eqnID)
+  docs = [parseArticle(article) for article in xml.getElementsByTagName("Article")]
 
-    source = {}
-    content = {}
-    for latex, eqnID in equations.items():
-      try:
-        source[eqnID] = latex 
+  for doc in docs:
+    doc['journalID'] = journalID
+    doc['publicationYear'] = publicationYear
 
-        preprocessed = preprocess("\\begin{document} " + latex + " \\end{document}")
-        renderer = JsonRenderer()
-        render(preprocessed,renderer)
-        content[eqnID] = renderer.dumps()
-      except KeyboardInterrupt, e:
-        raise e
-      except Exception, e:
-        print "Note: Preprocessor failed on equation %s : %s" % (eqnID, e)
+  return docs
 
-    doc = {'_id': encodeDoi(doi), 'journalID': journalID, 'publicationYear': publicationYear, 'type':type, 'source': source, 'content': content}
-    docs.append(doc)
+# Adding and deleting articles from the database
 
-  # Add docs
-  addDocs(docs)
+def addFile(fileName, type):
+  print "Reading file %s" % fileName
+  docs = parseFile(fileName)
 
-def delXml(fileName):
+  for doc in docs:
+    doc['type'] = type
+
+    oldDoc = db[doc._id]
+    if not oldDoc:
+      print "Adding new entry"
+      db[doc._id] = doc
+    elif (doc['type'] == 'xml.meta') and (oldDoc['type'] == 'xml'):
+      print "Full entry already exists, not overwriting with meta"
+    else:
+      print "Overwriting existing entry"
+      db[doc._id] = doc
+
+def delFile(fileName, type):
   print "Reading file %s" % fileName
   xml = minidom.parse(fileName)
 
-  # Collect dois
-  docs = []
   for article in xml.getElementsByTagName("Article"):
     doi = article.getElementsByTagName("ArticleDOI")[0].childNodes[0].wholeText
-    print ("Parsing %s" % doi)
-    docs.append({'_id': encodeDoi(doi)})
 
-  # Delete docs
-  print "Deleting..."
-  delDocs(docs)
+    oldDoc = db[doi]
+    if not oldDoc:
+      print "No entry to delete"
+    elif (type == 'xml.meta') and (oldDoc['type'] == 'xml'):
+      print "Full entry exists, not deleting meta"
+    else:
+      print "Deleting entry"
+      del db[doc._id]
+
+# Reprocess all latex sources in the database, handy when changing the preprocessor
+def reprocess():
+  confirm("Ensure that no other processes are currently modifying the database. Continue?")
+  print "Reprocessing latex sources"    
+  for doi in db:
+    print "Reprocessing %s" % doi
+    doc = db[doi]
+    doc['content'] = [eqnID, preprocess(eqnSource) for eqnID, eqnSource in doc['source']]
+    db[doi] = doc
+
+# Command line interaction
+
+def walk(path):
+  for root, _, files in os.walk(arg):
+    for file in files:
+      yield os.path.join(root,file)
 
 def usage():
-  print "Usage: --init, --add=docs.xml, --del=docs.xml"
+  print "Usage: --init, --reprocess, --add=/docs/addme, --del=/docs/delme"
 
 import os, os.path, getopt
 
 if __name__ == '__main__':
   try:
-    opts, args = getopt.getopt(sys.argv[1:], "", ["add=", "del=", "init"])
+    opts, args = getopt.getopt(sys.argv[1:], "", ["init", "reprocess", "add=", "del="])
     errors = []
 
     for opt, arg in opts:
       if opt == "--init":
         initDB()
-      if opt == "--add":
-        for root, _, files in os.walk(arg):
-          for fi in files:
-            fileType = ""
-            if fi.lower().endswith(".xml"):
-              fileType = "xml"
-            elif fi.lower().endswith(".xml.meta"):
-              fileType = "xml.meta"
-            if fileType:
-              try:
-                addXml(os.path.join(root,fi),fileType)      
-              except KeyboardInterrupt, e:
-                raise e
-              except Exception, exc:
-                print exc
-                errors.append((os.path.join(root,fi),exc))
-      if opt == "--del":
-        for root, _, files in os.walk(arg):
-          for fi in files:
-            if fi.endswith(".xml"):
-              delXml(os.path.join(root,fi))
+      elif opt == "--reprocess":
+        reprocess()
+      elif opt == "--add":
+        for file in walk(arg):
+          try:
+            if file.lower().endswith(".xml"):
+              addFile(os.path.join(root,fi),"xml")
+            elif file.lower().endswith(".xml.meta"):
+              addFile(os.path.join(root,fi),"xml.meta")
+          except KeyboardInterrupt, e:
+            raise e
+          except Exception, exc:
+            print exc
+            errors.append((os.path.join(root,fi),exc))
+      elif opt == "--del":
+          try:            
+            if file.lower().endswith(".xml"):
+              delFile(os.path.join(root,fi),"xml")
+            elif file.lower().endswith(".xml.meta"):
+              delFile(os.path.join(root,fi),"xml.meta")
+          except KeyboardInterrupt, e:
+            raise e
+          except Exception, exc:
+            print exc
+            errors.append((os.path.join(root,fi),exc))
     if errors:
       print "Errors occurred whilst processing the following files:"
       for (fi,exc) in errors:
