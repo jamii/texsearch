@@ -1,11 +1,19 @@
 #!/usr/bin/env python
+import re
 import sys, httplib, urllib
 from xml.dom import minidom
 import preprocessor
 from util import encodeDoi
 import couchdb.client
 
-couchdb = couchdb.client.Server('http://localhost:5984/')
+# Find the couchdb server
+conf = open("./db.ini")
+port = re.compile(r"port *= *(\d+)").search(conf.read()).group(1)
+conf.close()
+
+print 'couchdb is at http://localhost:%s/' % port
+
+couchdb = couchdb.client.Server('http://localhost:%s/' % port)
 db = couchdb['documents']
 
 def preprocess(latex):

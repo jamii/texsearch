@@ -79,7 +79,20 @@ let save_index index =
 
 (* Database interaction *)
 
-let db_url = "http://localhost:5984/documents/"
+let couchdb_url = 
+  (* Ocaml's file handling is terrible... *)
+  let conf = open_in "./db.ini" in
+  let rec read_port () =
+    try
+      let line = input_line conf in
+      Str.search_forward (Str.regexp "port *= *\([0-9]+\)") line 0;
+      Str.matched_group 1 line
+    with Not_found -> read_port () in
+  "http://localhost:" ^ read_port () ^ "/"
+
+let _ = flush_line ("couchdb is at " ^ couchdb_url)
+
+let db_url = couchdb_url ^ "documents/"
 
 let get_document doi =
   let url = db_url ^ doi in
