@@ -2,7 +2,7 @@
 import re
 import sys, httplib, urllib
 from xml.dom import minidom
-import preprocessor
+from preprocessor import JsonProcessor, parseLaTeX
 from util import encodeDoi
 import couchdb.client
 
@@ -16,11 +16,15 @@ print 'couchdb is at http://localhost:%s/' % port
 couchdb = couchdb.client.Server('http://localhost:%s/' % port)
 db = couchdb['documents']
 
-def preprocess(latex):
-  preprocessed = preprocessor.preprocess("\\begin{document} " + latex + " \\end{document}")
-  renderer = preprocessor.JsonRenderer()
-  preprocessor.render(preprocessed,renderer)
-  return renderer.dumps()
+# Wrap the JsonProcessor in some error handling, since plasTeX often fails in weird ways
+def preprocess(eqnID, latex):
+  try:  
+    return JsonProcessor().process(parseLaTeX("\\begin{document} " + latex + " \\end{document}")).dumps()
+  except KeyboardInterrupt, e:
+    raise e
+  except Exception, e:
+    print "Note: Preprocessor failed on equation %s : %s" % (eqnID, e)
+    return None
 
 def confirm(prompt):
   response = raw_input(prompt + " (y/n):")
@@ -64,16 +68,8 @@ def parseArticle(article):
   # Eliminate duplicate equations (key is eqnSource)
   equations = dict(equations).items()
 
-  source = {}
-  content = {}
-  for latex, eqnID in equations.items():
-    try:
-      source[eqnID] = latex 
-      content[eqnID] = preprocess(latex)
-    except KeyboardInterrupt, e:
-      raise e
-    except Exception, e:
-      print "Note: Preprocessor failed on equation %s : %s" % (eqnID, e)
+  source = [eqnID, eqnSource for eqnSource, eqnID in equations]
+  content = [eqnID, preprocess(eqnSource) for eqnSource, eqnID in equations]
 
   return {'_id': encodeDoi(doi), 'source': source, 'content': content}
 

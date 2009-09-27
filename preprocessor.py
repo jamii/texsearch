@@ -3,19 +3,104 @@
 import string, re
 from plasTeX import TeXFragment
 from plasTeX.DOM import Node
+from plasTeX.TeX import TeX
+from plasTeX.Base.TeX.Primitives import MathShift
 
-class BadRender(Exception):
+# LaTeX preprocessing
+
+# Ignore useless nodes
+# There are probably more nodes that could be ignored but these are the most common
+ignoreSet = frozenset([
+ 'displaymath'
+,'bgroup'
+,'egroup'
+,'math'
+,'text'
+,'nulldelimiterspace'
+,'kern'
+,'vphantom'
+,'hphantom'
+,'hfill'
+,'vfill'
+,'hbox'
+,'align'
+,'aligned'
+,'gathered'
+,'active::&'
+,'#document'
+,'document'
+,'rm'
+,'par'
+,'None'
+,'mathord'
+,'array'
+])
+
+def isMathMode(obj):
+  return True
+
+class BadProcess(Exception):
   pass
 
-class JsonRenderer:
+class Processor:
+  def __init__(self):
+    pass
+  
+  def process(self,node):
+    if node.nodeType == Node.TEXT_NODE:
+      # Short circuit text nodes
+      text = unicode(node)
+      if (re.sub("\s+","",text) != "") & (not (text in ignoreSet)):
+        self.addText(text)
+    elif node.nodeName in ignoreSet:
+      # Ignore node and move on to children
+      for child in node.childNodes:
+        self.process(child)
+    else:
+      self.pushMacro(unicode(node.nodeName))
+      self.processChildren(node)
+      self.popMacro(unicode(node.nodeName))
+
+    return self
+
+  def processChildren(self,node):
+    # See if we have any attributes to process
+    if node.hasAttributes():
+      for key, value in node.attributes.items():
+        # If the key is 'self' these nodes are the same as the child nodes
+        # If the key is '*modifier*' we dont care about it
+        if key == 'self' or key == '*modifier*':
+          continue
+        elif value.__class__ is TeXFragment:
+          self.openBracket()
+          for child in value.childNodes:
+            self.process(child)
+          self.closeBracket()
+        elif value.__class__ is Node:
+          self.openBracket()
+          self.process(value)
+          self.closeBracket()
+        else:
+          continue 
+
+    # Process child nodes
+    if node.childNodes:
+      self.openBracket()
+      for child in node.childNodes:
+        self.process(child)
+      self.closeBracket()
+  
+    return self
+
+# Converts a plasTeX DOM tree into a json tree
+class JsonProcessor(Processor):
   def __init__(self):
     self.text = [[]]
     self.macros = []
 
   def dumps(self):
     if len(self.text) != 1:
-      raise BadRender()
-    # Dont convert to string - the response goes out through json.dumps anyway
+      raise BadProcess()
     return self.text[0]
 
   def addText(self,text):
@@ -26,14 +111,11 @@ class JsonRenderer:
     self.macros.append(macro)
 
   def popMacro(self,macro):
-    try:
-      currentMacro = self.macros.pop()
-      if currentMacro != macro:
-        raise BadRender()
-      currentText = self.text.pop()
-      self.text[-1].append({currentMacro : currentText})
-    except Exception:
-      raise BadRender()
+    currentMacro = self.macros.pop()
+    if currentMacro != macro:
+      raise BadProcess()
+    currentText = self.text.pop()
+    self.text[-1].append({currentMacro : currentText})
 
   def openBracket(self):
     pass
@@ -41,7 +123,8 @@ class JsonRenderer:
   def closeBracket(self):
     pass
 
-class PlainRenderer:
+# Converts a plasTeX DOM tree back into plain LaTeX
+class PlainProcessor(Processor):
   def __init__(self):
     self.text = []
     self.macros = 0
@@ -68,93 +151,22 @@ class PlainRenderer:
   def closeBracket(self):
     self.text.append("}")
 
-# Ignore useless tags
-ignoreSet = frozenset([
- 'displaymath'
-,'bgroup'
-,'math'
-,'text'
-,'nulldelimiterspace'
-,'kern'
-,'vphantom'
-,'hphantom'
-,'hfill'
-,'vfill'
-,'hbox'
-,'align'
-,'aligned'
-,'gathered'
-,'active::&'
-,'#document'
-,'document'
-,'left'
-,'right'
-,'rm'
-,'par'
-,'None'
-,'mathord'
-,'array'
-])
+def parseLaTeX(self,string):
+    # PlasTeX bug - this variable doent get reinitialised
+    MathShift.inEnv = []
 
-def render(node,renderer):
-  if node.nodeType == Node.TEXT_NODE:
-    # Short circuit text nodes
-    text = unicode(node)
-    if (re.sub("\s+","",text) != "") & (not (text in ignoreSet)):
-      renderer.addText(text)
-  elif node.nodeName in ignoreSet:
-    # Ignore node and move on to children
-    for child in node.childNodes:
-      render(child,renderer)
-  else:
-    renderer.pushMacro(unicode(node.nodeName))
-    renderChildren(node,renderer)
-    renderer.popMacro(unicode(node.nodeName))
+    # Instantiate a TeX processor and parse the input text
+    tex = TeX()
+    tex.disableLogging()
 
-def renderChildren(node,renderer):
-    # See if we have any attributes to render
-    if node.hasAttributes():
-      for key, value in node.attributes.items():
-        # If the key is 'self' these nodes are the same as the child nodes
-        # If the key is '*modifier*' we dont care about it
-        if key == 'self' or key == '*modifier*':
-          continue
-        elif value.__class__ is TeXFragment:
-          renderer.openBracket()
-          for child in value.childNodes:
-            render(child,renderer)
-          renderer.closeBracket()
-        elif value.__class__ is Node:
-          renderer.openBracket()
-          render(value,renderer)
-          renderer.closeBracket()
-        else:
-          continue 
+    # Override plasTeX's buggy handling of mathmode, since we dont need textmode
+    tex.ownerDocument.context.isMathMode = isMathMode
 
-    # Render child nodes
-    if node.childNodes:
-      renderer.openBracket()
-      for child in node.childNodes:
-        render(child,renderer)
-      renderer.closeBracket()
+    # Parse the LaTeX
+    tex.input(string)
+    return tex.parse()
 
-from plasTeX.TeX import TeX
-from plasTeX.Base.TeX.Primitives import MathShift
-
-def isMathMode(obj):
-  return True
-
-def preprocess(string):
-  # PlasTeX bug - this variable doent get reinitialised
-  MathShift.inEnv = []
-
-  # Instantiate a TeX processor and parse the input text
-  tex = TeX()
-  tex.disableLogging()
-  # Override plasTeX's buggy handling of mathmode, since we dont need textmode
-  tex.ownerDocument.context.isMathMode = isMathMode
-  tex.input(string)
-  return tex.parse()
+# Making the preprocessor available as a couchdb _external
 
 import sys
 import simplejson as json
@@ -193,26 +205,18 @@ def main():
           timeout = 5
         signal.alarm(timeout)    
    
-        result = preprocess("\\begin{document} $$" + query['latex'] + "$$ \\end{document}")
+        dom = parseLaTeX("\\begin{document} $$" + query['latex'] + "$$ \\end{document}")
 
         if format == 'json-plain':
-          jsonRenderer = JsonRenderer()
-          render(result,jsonRenderer)
-          plainRenderer = PlainRenderer()
-          render(result,plainRenderer)
-          response = {'code':200, 'json':{'json':jsonRenderer.dumps(), 'plain':plainRenderer.dumps()}}
+          json = JsonProcessor().process(dom).dumps()
+          plain = PlainProcessor().process(dom).dumps()
+          response = {'code':200, 'json':{'json':json, 'plain':plain}}
         elif format == 'json':
-          renderer = JsonRenderer()
-          render(result,renderer)
-          response = {'code':200, 'json':renderer.dumps()}
-        elif format == 'xml':
-          renderer = XmlRenderer()
-          render(result,renderer)
-          response = {'code':200, 'body':renderer.dumps(), 'headers':{'Content-type':'text/xml'}}
+          json = JsonProcessor().process(dom).dumps()
+          response = {'code':200, 'json':json}
         elif format == 'plain':
-          renderer = PlainRenderer()
-          render(result,renderer)
-          response = {'code':200, 'body':renderer.dumps(), 'headers':{'Content-type':'text/plain'}}
+          plain = PlainProcessor().process(dom).dumps()
+          response = {'code':200, 'body':plain, 'headers':{'Content-type':'text/plain'}}
         else:
           response = {'code':400, 'body':('Error: bad format argument'), 'headers':{'Content-type':'text/plain'}} # Bad request
 
