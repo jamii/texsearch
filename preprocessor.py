@@ -1,12 +1,13 @@
 #!/bin/env python
 
 import string, re
-from plasTeX import TeXFragment
+from plasTeX import TeXFragment, TeXDocument
+import plasTeX.Context
 from plasTeX.DOM import Node
 from plasTeX.TeX import TeX
 from plasTeX.Base.TeX.Primitives import MathShift
 
-# LaTeX preprocessing
+### LaTeX preprocessing ###
 
 # Ignore useless nodes
 # There are probably more nodes that could be ignored but these are the most common
@@ -50,8 +51,10 @@ class Processor:
     if node.nodeType == Node.TEXT_NODE:
       # Short circuit text nodes
       text = unicode(node)
-      if (re.sub("\s+","",text) != "") & (not (text in ignoreSet)):
-        self.addText(text)
+      # Would prefer to keep text nodes in one piece but plasTeX has a nasty habit of concatenating adjacent characters even in mathmode
+      for char in text:
+        if char != ' ':
+          self.addText(char)
     elif node.nodeName in ignoreSet:
       # Ignore node and move on to children
       for child in node.childNodes:
@@ -92,7 +95,7 @@ class Processor:
   
     return self
 
-# Converts a plasTeX DOM tree into a json tree
+# Converts a plasTeX DOM tree into a json tree #
 class JsonProcessor(Processor):
   def __init__(self):
     self.text = [[]]
@@ -151,7 +154,10 @@ class PlainProcessor(Processor):
   def closeBracket(self):
     self.text.append("}")
 
-def parseLaTeX(self,string):
+# Override plasTeX's buggy handling of mathmode, since we dont need textmode
+plasTeX.Context.Context.isMathMode = property(lambda obj: True)
+
+def parseLaTeX(string):
     # PlasTeX bug - this variable doent get reinitialised
     MathShift.inEnv = []
 
@@ -159,14 +165,11 @@ def parseLaTeX(self,string):
     tex = TeX()
     tex.disableLogging()
 
-    # Override plasTeX's buggy handling of mathmode, since we dont need textmode
-    tex.ownerDocument.context.isMathMode = isMathMode
-
     # Parse the LaTeX
     tex.input(string)
     return tex.parse()
 
-# Making the preprocessor available as a couchdb _external
+### Making the preprocessor available as a couchdb _external  ###
 
 import sys
 import simplejson as json
@@ -208,15 +211,15 @@ def main():
         dom = parseLaTeX("\\begin{document} $$" + query['latex'] + "$$ \\end{document}")
 
         if format == 'json-plain':
-          json = JsonProcessor().process(dom).dumps()
-          plain = PlainProcessor().process(dom).dumps()
-          response = {'code':200, 'json':{'json':json, 'plain':plain}}
+          jsonResponse = JsonProcessor().process(dom).dumps()
+          plainResponse = PlainProcessor().process(dom).dumps()
+          response = {'code':200, 'json':{'json':jsonResponse, 'plain':plainResponse}}
         elif format == 'json':
-          json = JsonProcessor().process(dom).dumps()
-          response = {'code':200, 'json':json}
+          jsonResponse = JsonProcessor().process(dom).dumps()
+          response = {'code':200, 'json':jsonResponse}
         elif format == 'plain':
-          plain = PlainProcessor().process(dom).dumps()
-          response = {'code':200, 'body':plain, 'headers':{'Content-type':'text/plain'}}
+          plainResponse = PlainProcessor().process(dom).dumps()
+          response = {'code':200, 'body':plainResponse, 'headers':{'Content-type':'text/plain'}}
         else:
           response = {'code':400, 'body':('Error: bad format argument'), 'headers':{'Content-type':'text/plain'}} # Bad request
 

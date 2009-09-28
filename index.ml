@@ -90,8 +90,6 @@ let couchdb_url =
     with Not_found -> read_port () in
   "http://localhost:" ^ read_port () ^ "/"
 
-let _ = flush_line ("couchdb is at " ^ couchdb_url)
-
 let db_url = couchdb_url ^ "documents/"
 
 let get_document doi =
@@ -286,6 +284,7 @@ let rec run_update_batches index =
   if List.length update_batch < batch_size then index else run_update_batches index
 
 let run_updates () = 
+  flush_line ("couchdb is at " ^ couchdb_url);
   flush_line "Loading index";
   let index = load_index () in
   let index = 
@@ -300,6 +299,7 @@ let run_updates () =
 (* Initialising index *)
 
 let init_index () =
+  flush_line ("couchdb is at " ^ couchdb_url);
   print_string "This will erase the existing index. Are you sure? (y/n):"; flush stdout;
   if read_line () = "y"
   then
@@ -314,6 +314,7 @@ let init_index () =
 module DoiMap = Bktree.DoiMap
 
 let list_all () =
+  flush_line ("couchdb is at " ^ couchdb_url);
   flush_line "Loading index";
   let index = load_index () in
   DoiMap.iter
@@ -322,6 +323,7 @@ let list_all () =
     (Bktree.doi_map index.bktree)
 
 let list_one doi =
+  flush_line ("couchdb is at " ^ couchdb_url);
   flush_line "Loading index";
   let index = load_index () in
   flush_line ("Searching for " ^ doi);
@@ -336,13 +338,11 @@ let list_one doi =
 (* Main *)
 
 open Arg
-let _ = 
-  flush_line "Note: Be sure to call this program from the texsearch directory";
-  parse
-    [("-init", Unit init_index, ": Create an empty index")
-    ;("-update", Unit run_updates, ": Update the index")
-    ;("-query", Unit handle_queries, ": Handle index queries as a couchdb _external")
-    ;("-list_all", Unit list_all, ": List all indexed keys")
-    ;("-list", String list_one, ": List the entry for a given key")]
-    ignore
-    "Use 'index -help' for available options"
+let _ = parse
+  [("-init", Unit init_index, ": Create an empty index")
+  ;("-update", Unit run_updates, ": Update the index")
+  ;("-query", Unit handle_queries, ": Handle index queries as a couchdb _external")
+  ;("-list_all", Unit list_all, ": List all indexed keys")
+  ;("-list", String list_one, ": List the entry for a given key")]
+  ignore
+  "Use 'index -help' for available options"
