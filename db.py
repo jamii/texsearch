@@ -144,13 +144,24 @@ def delFile(fileName, type):
 def reprocess():
   db = couchdb_server['documents']
 
-  confirm("Ensure that no other processes are currently modifying the database. Continue?")
   print "Reprocessing latex sources"    
   for doi in db:
     print "Reprocessing %s" % decodeDoi(doi)
     doc = db[doi]
     doc['content'] = dict(filterNone([(preprocess(eqnID, latex)) for (eqnID, latex) in doc['source'].items()]))
     db[doi] = doc
+
+# Repair this server by copying content from targetServer
+def repair(targetServer):
+  db = couchdb_server['documents']
+  targetdb = couchdb.client.Server(targetServer)['documents']
+
+  print "Copying from %s" % target_server  
+
+  for doi in db:
+    targetDoc = targetdb.get(doi,None)
+    if targetDoc:
+      db[doi] = targetDoc 
 
 ### Command line interaction ###
 
