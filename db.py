@@ -52,12 +52,11 @@ def preprocess(eqnID, latex):
 def parseEquation(eqn):
   eqnID = eqn.attributes.get('ID').value
   try:
-    eqnSource = eqn.getElementsByTagName("EquationSource")[0]
-    if eqnSource.attributes.get('Format').value == "TEX":
-      latex = eqnSource.childNodes[0].wholeText
-      return (latex, eqnID)
-    else:
-      return None
+    for eqnSource in eqn.getElementsByTagName("EquationSource"):
+      if eqnSource.attributes.get('Format').value == "TEX":
+        latex = eqnSource.childNodes[0].wholeText
+        return (latex, eqnID)
+    return None
   except IndexError:
     print ("Note: no equation source for eqn %s" % eqnID)
   except AttributeError:
