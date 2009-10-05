@@ -29,7 +29,6 @@ and request =
     ; ?searchTimeout : string = "10.0"
     ; ?preprocessorTimeout : string = "5.0"
     ; ?limit : string = "1000"
-    ; ?format : string = "xml" 
     ; ?doi : string option 
     ; ?journalID : string option
     ; ?publishedAfter : string option 
@@ -43,10 +42,6 @@ and update =
 
 and updates =
   < rows : update list >
-
-and result = doi * ((string * int) list)
-
-and results = result list
 
 and preprocessed =
   < json : Latex.t
@@ -104,18 +99,6 @@ let preprocess timeout latex_string =
 
 (* Responses to couchdb *)
 
-let json_response results query_string =
-  Json_type.Object
-    [ ("code",Json_type.Int 200)
-    ; ("json",Json_type.Object
-        [ ("query",Json_type.String query_string)
-        ; ("results",json_of_results results) ]) ]
-
-let json_limit_response = 
-  Json_type.Object
-    [ ("code",Json_type.Int 200)
-    ; ("json",Json_type.String "Limit exceeded") ]
-
 let xml_of_results results query_string =
   let xml_of_eqn (source,weight) =
     Xml.Element ("equation", [("distance",string_of_int weight)], [Xml.PCData source]) in
@@ -139,6 +122,12 @@ let xml_limit_response =
     ; ("headers",Json_type.Object [("Content-type",Json_type.String "text/xml")])
     ; ("body",Json_type.String (Xml.to_string (Xml.Element ("LimitExceeded",[],[])))) ]
 
+let xml_timeout_response = 
+  Json_type.Object
+    [ ("code",Json_type.Int 200)
+    ; ("headers",Json_type.Object [("Content-type",Json_type.String "text/xml")])
+    ; ("body",Json_type.String (Xml.to_string (Xml.Element ("TimedOut",[],[])))) ]
+
 (* Timeouts *)
 
 exception Timeout
@@ -159,7 +148,7 @@ let with_timeout tsecs f =
 (* Queries *)
 
 type search_result =
-  | Results of results
+  | Results of (doi * ((string * int) list)) list
   | LimitExceeded
 
 let get_result filter (doi,ids) =
@@ -207,24 +196,18 @@ let handle_query bktree str =
         &&  ((args#publishedBefore = None) || ((args#publishedBefore >= document#publicationYear) && (document#publicationYear != None)))
         &&  ((args#publishedAfter  = None) || ((args#publishedAfter  <= document#publicationYear) && (document#publicationYear != None))) in
       let search_results = 
-        with_timeout searchTimeout (fun _ ->
+        with_timeout searchTimeout (fun () ->
           match args#doi with
             | Some doi -> run_single_query (encode_doi doi) filter query (* Search within a single article *)
             | None -> run_full_query bktree limit filter query (* Search within all articles *)) in
-      match (search_results, args#format) with
-        | (Results results, "xml") -> xml_response (sort_results results) (Query.to_string query)
-        | (LimitExceeded, "xml") -> xml_limit_response
-        | (Results results, "json") -> json_response (sort_results results) (Query.to_string query)
-        | (LimitExceeded, "json") -> json_limit_response
+      match search_results with
+        | Results results -> xml_response (sort_results results) (Query.to_string query)
+        | LimitExceeded -> xml_limit_response
     with
       | Json_type.Json_error _ | Failure _ | Query.Parse_error ->
           Json_type.Object [("code",Json_type.Int 400)] (* Bad request *)
-      | Timeout ->
-          Json_type.Object [ ("code",Json_type.Int 500) (* Internal server error *)
-                           ; ("headers",Json_type.Object [("Content-type",Json_type.String "text/plain")])
-                           ; ("body",Json_type.String "Error: Timed out") ]
-      | _ ->
-          Json_type.Object [("code",Json_type.Int 500)] (* Internal server error *) in
+      | Timeout -> xml_timeout_response
+      | _ -> Json_type.Object [("code",Json_type.Int 500)] (* Internal server error *) in
   flush_line (Json_io.string_of_json ~compact:true response)
 
 let handle_queries () =
