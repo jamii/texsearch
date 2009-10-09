@@ -1,27 +1,21 @@
 (*
-Toplevel interaction with the search index.
-Mostly I/O and error handling.
+This module controls toplevel interaction with the search index.
+Mostly I/O and error handling. See the last section for the commands supported.
 *)
-
-module Http = Http_client.Convenience
-let encode url = Netencoding.Url.encode ~plus:false url
-
-let encode_doi doi = Str.global_replace (Str.regexp "/") "_" doi
-let decode_doi doi = Str.global_replace (Str.regexp "_") "/" doi
-
-let flush_line str = print_string str; print_string "\n"; flush stdout
 
 (* Types and json parsing *)
 
 type json doi = string
 
-and id = string
+and eqnID = string
+and journalID = string
+and publicationYear = string
 
 and document =
-  < journalID : string 
-  ; publicationYear : string option
-  ; content : (string * Latex.t) assoc (* id*Latex.t *)
-  ; source : (string * string) assoc > (* id*string *)
+  < journalID : journalID
+  ; publicationYear : publicationYear option
+  ; content : (string * Latex.t) assoc (* eqnID*Latex.t *)
+  ; source : (string * string) assoc > (* eqnID*string *)
 
 and request =
   < args "query" :
@@ -30,9 +24,9 @@ and request =
     ; ?preprocessorTimeout : string = "5.0"
     ; ?limit : string = "1000"
     ; ?doi : string option 
-    ; ?journalID : string option
-    ; ?publishedAfter : string option 
-    ; ?publishedBefore : string option > >
+    ; ?journalID : journalID option
+    ; ?publishedAfter : publicationYear option
+    ; ?publishedBefore : publicationYear option > >
 
 and update =
   < id : doi
@@ -47,9 +41,55 @@ and preprocessed =
   < json : Latex.t
   ; plain : string >
 
+type eqn_node = 
+  { doi : doi
+  ; eqnID : eqnID
+  ; latex : Latex.t }
+
+(* Assorted imports and utililty functions *)
+
+module Http = Http_client.Convenience
+let encode url = Netencoding.Url.encode ~plus:false url
+
+(* couchdb does not allow '/' in keys *)
+let encode_doi doi = Str.global_replace (Str.regexp "/") "_" doi
+let decode_doi doi = Str.global_replace (Str.regexp "_") "/" doi
+
+let flush_line str = print_string str; print_string "\n"; flush stdout
+
+module Doi_map = 
+struct
+  include Map.Make (struct
+    type t = doi
+    let compare = compare
+  end)
+
+  let update key f default map =
+    add key (try f (find key map) with Not_found -> default) map
+
+  let count map = fold (fun _ _ n -> n+1) map 0
+
+  let list_of map = fold (fun k v rest -> (k,v) :: rest) map []
+end
+
+(* Our main index structure *)
+
+module Eqn_node_metric : (
+sig 
+  type t = eqn_node
+  val dist : eqn_node -> eqn_node -> int
+end) =
+struct
+  type t = eqn_node
+  let dist a b = Edit.left_edit_distance a.latex b.latex
+end
+
+module Index_tree = Bktree.Make (Eqn_node_metric)
+
 type index =
-  { last_update : int
-  ; bktree : Bktree.bktree }
+  { last_update : int (* Key of the last update received from couchdb *)
+  ; index_tree : Index_tree.t
+  ; metadata : (journalID * publicationYear option * int) Doi_map.t }
 
 (* Persisting *)
 
@@ -100,33 +140,25 @@ let preprocess timeout latex_string =
 (* Responses to couchdb *)
 
 let xml_of_results results query_string =
-  let xml_of_eqn (source,weight) =
-    Xml.Element ("equation", [("distance",string_of_int weight)], [Xml.PCData source]) in
+  let xml_of_eqn (eqnID,weight) =
+    Xml.Element ("equation", [("distance",string_of_int weight);("id",eqnID)], []) in
   let xml_of_result (doi,eqns) =
     Xml.Element ("result", 
       [("doi", decode_doi doi);("count", string_of_int (List.length eqns))], 
       (List.map xml_of_eqn eqns)) in
   let xml_of_query_string =
     Xml.Element ("query",[],[Xml.PCData query_string]) in
-  Xml.to_string (Xml.Element ("results", [], xml_of_query_string :: (List.map xml_of_result results)))
+  Xml.Element ("results", [], xml_of_query_string :: (List.map xml_of_result results))
 
-let xml_response results query_string =
+let xml_of_limit_exceeded = Xml.Element ("LimitExceeded",[],[])
+
+let xml_of_timeout = Xml.Element ("TimedOut",[],[])
+
+let xml_response xml = 
   Json_type.Object
     [ ("code",Json_type.Int 200)
     ; ("headers",Json_type.Object [("Content-type",Json_type.String "text/xml")])
-    ; ("body",Json_type.String (xml_of_results results query_string)) ]
-
-let xml_limit_response =
-  Json_type.Object
-    [ ("code",Json_type.Int 200)
-    ; ("headers",Json_type.Object [("Content-type",Json_type.String "text/xml")])
-    ; ("body",Json_type.String (Xml.to_string (Xml.Element ("LimitExceeded",[],[])))) ]
-
-let xml_timeout_response = 
-  Json_type.Object
-    [ ("code",Json_type.Int 200)
-    ; ("headers",Json_type.Object [("Content-type",Json_type.String "text/xml")])
-    ; ("body",Json_type.String (Xml.to_string (Xml.Element ("TimedOut",[],[])))) ]
+    ; ("body",Json_type.String (Xml.to_string xml)) ]
 
 (* Timeouts *)
 
@@ -147,75 +179,79 @@ let with_timeout tsecs f =
 
 (* Queries *)
 
-type search_result =
-  | Results of (doi * ((string * int) list)) list
-  | LimitExceeded
+(* The choice of cutoff is completely arbitrary *)
+let cutoff_length query = 1 + (min 5 (Query.max_length query / 3))
 
-let get_result filter (doi,ids) =
-  let doc = get_document doi in
-  if filter doc
+let run_query index query filter limit =
+  let eqns = 
+    Util.list_of_stream 
+    (Index_tree.run_query 
+      (fun eqn_node -> Query.query_dist query eqn_node.latex) 
+      (cutoff_length query) 
+      index.index_tree) in
+  (* Collate eqns by doi *)
+  let doi_map =
+    List.fold_left
+      (fun doi_map (eqn_node,weight) -> 
+        let (key, value) = (eqn_node.doi, (eqn_node.eqnID,weight)) in
+        Doi_map.update key (fun values -> value::values) [value] doi_map)
+      Doi_map.empty      
+      eqns in
+  (* Remove the dummy node *)
+  let doi_map = Doi_map.remove "" doi_map in
+  if Doi_map.count doi_map > limit 
   then 
-    let weighted_source = List.map (fun (id,weight) -> (List.assoc id doc#source, weight)) ids in
-    Some (decode_doi doi, weighted_source)
+    xml_of_limit_exceeded
   else
-    None
+    let results = Doi_map.list_of doi_map in
+    let results = List.filter (fun (doi,_) -> filter doi) results in
+    (* Sort each set of equations by weight *)
+    let results = List.map (fun (doi,eqns) -> (doi,List.sort (fun a b -> compare (snd a) (snd b)) eqns)) results in
+    (* Sort doi's by lowest weighted equation *)
+    let results = List.sort (fun (_,eqnsA) (_,eqnsB) -> compare (snd (List.hd eqnsA)) (snd (List.hd eqnsB))) results in
+    xml_of_results results (Query.to_string query)
 
-let run_single_query doi filter query =
-  let eqns = (get_document doi)#content in
-  let (_,weighted_eqns) = Bktree.query_against query eqns (Bktree.cutoff_length query) in
-  Results (Util.filter_map (get_result filter) [(doi, weighted_eqns)])
-
-let run_full_query bktree limit filter query =
-  let results = Bktree.run_search (limit+1) (Bktree.new_search query bktree) in
-  if List.length results > limit
-  then LimitExceeded
-  else Results (Util.filter_map (get_result filter) results)
-
-let sort_results results =
-  let weighted_results = 
-    List.map 
-      (fun (doi,eqns) -> 
-        let weight = Util.minimum (List.map snd eqns) in
-        let sorted_eqns = List.sort (fun a b -> compare (snd a) (snd b)) eqns in
-        (weight,(doi,sorted_eqns)))
-    results in
-  let sorted_weighted_results = 
-    List.sort (fun a b -> compare (fst a) (fst b)) weighted_results in
-  List.map snd sorted_weighted_results
-
-let handle_query bktree str =
-  let response =
-    try
-      let args = (request_of_json (Json_io.json_of_string str))#args in
-      let searchTimeout = float_of_string args#searchTimeout in
-      let preprocessorTimeout = args#preprocessorTimeout in
-      let limit = int_of_string args#limit in
-      let query = Query.of_string (preprocess preprocessorTimeout) args#searchTerm in
-      let filter document = 
-            ((args#journalID = None) || (args#journalID = Some document#journalID))
-        &&  ((args#publishedBefore = None) || ((args#publishedBefore >= document#publicationYear) && (document#publicationYear != None)))
-        &&  ((args#publishedAfter  = None) || ((args#publishedAfter  <= document#publicationYear) && (document#publicationYear != None))) in
-      let search_results = 
-        with_timeout searchTimeout (fun () ->
-          match args#doi with
-            | Some doi -> run_single_query (encode_doi doi) filter query (* Search within a single article *)
-            | None -> run_full_query bktree limit filter query (* Search within all articles *)) in
-      match search_results with
-        | Results results -> xml_response (sort_results results) (Query.to_string query)
-        | LimitExceeded -> xml_limit_response
-    with
-      | Json_type.Json_error _ | Failure _ | Query.Parse_error ->
-          Json_type.Object [("code",Json_type.Int 400)] (* Bad request *)
-      | Timeout -> xml_timeout_response
-      | _ -> Json_type.Object [("code",Json_type.Int 500)] (* Internal server error *) in
-  flush_line (Json_io.string_of_json ~compact:true response)
+let handle_query index str =
+  try
+    let args = (request_of_json (Json_io.json_of_string str))#args in
+    let searchTimeout = float_of_string args#searchTimeout in
+    let preprocessorTimeout = args#preprocessorTimeout in
+    let limit = int_of_string args#limit in
+    let query = Query.of_string (preprocess preprocessorTimeout) args#searchTerm in
+    let filter doi = 
+      let (journalID, publicationYear, _) = Doi_map.find doi index.metadata in
+          ((args#journalID = None) || (args#journalID = Some journalID))
+      &&  ((args#publishedBefore = None) || ((args#publishedBefore >= publicationYear) && (publicationYear != None)))
+      &&  ((args#publishedAfter  = None) || ((args#publishedAfter  <= publicationYear) && (publicationYear != None))) in
+    xml_response (with_timeout searchTimeout (fun () -> run_query index query filter limit))
+  with
+    | Json_type.Json_error _ | Failure _ | Query.Parse_error ->
+        Json_type.Object [("code",Json_type.Int 400)] (* Bad request *)
+    | Timeout -> xml_response xml_of_timeout
+    | _ -> Json_type.Object [("code",Json_type.Int 500)] (* Internal server error *)
 
 let handle_queries () =
-  let bktree = (load_index ()).bktree in
+  let index = load_index () in
   while true do
     let input = input_line stdin in
-    handle_query bktree input
+    let json = handle_query index input in
+    flush_line (Json_io.string_of_json ~compact:true json)
   done
+
+(* Initialising index *)
+
+let init_index () =
+  flush_line ("couchdb is at " ^ couchdb_url);
+  print_string "This will erase the existing index. Are you sure? (y/n):"; flush stdout;
+  if read_line () = "y"
+  then
+    (flush_line "Saving index";
+    (* We stick a dummy node at the base of the tree so we don't have to deal with empty trees *)
+    let index_tree = Index_tree.empty_branch {doi=""; eqnID=""; latex=Latex.empty()} in
+    save_index {last_update = -1; index_tree = index_tree; metadata = Doi_map.empty};
+    flush_line "Ok")
+  else
+    flush_line "Ok, nothing was done"
 
 (* Updating the index *)
 
@@ -241,28 +277,31 @@ exception FailedUpdate of int * doi
 
 let run_update index update =
   try
-    let bktree = Bktree.delete update#id index.bktree in
-    let bktree =
-      match (update#value#deleted, update#doc) with
-        | (_, None) | (true, _) -> bktree
-        | (false, Some json) ->
-            let doc = document_of_json json in
-            if List.length doc#content > 0
-            then 
-              List.fold_left 
-                (fun bktree eqn -> Bktree.add (Bktree.node_of update#id eqn) bktree)
-                bktree
-                doc#content
-            else bktree in
-    {last_update=update#key; bktree=bktree}
+    (* Start by deleting old version of the document *)
+    let index_tree = 
+      match Index_tree.filter (fun eqn_node -> eqn_node.doi != update#id) index.index_tree with
+        | Some index_tree -> index_tree
+        (* We somehow managed to delete the dummy node at the base of the tree *)
+        | None -> raise (FailedUpdate (update#key, update#id)) in
+    let metadata = Doi_map.remove update#id index.metadata in
+    (* Add the new version of the documents if the deleted flag is not set *)
+    match (update#doc, update#value#deleted) with
+      | (None, _) | (_,true) -> {last_update=update#key; index_tree=index_tree; metadata=metadata}
+      | (Some json, false) ->
+          let doc = document_of_json json in
+          let index_tree =
+            List.fold_left 
+              (fun index_tree (eqnID,latex) -> Index_tree.add {doi=update#id; eqnID=eqnID; latex=latex} index_tree)
+              index_tree
+              doc#content in
+          let metadata = Doi_map.add update#id (doc#journalID, doc#publicationYear, List.length doc#content) metadata in
+          {last_update=update#key; index_tree=index_tree; metadata=metadata}
   with _ ->
     raise (FailedUpdate (update#key, update#id))
 
 let rec run_update_batches index =
   let update_batch = get_update_batch index.last_update in
-  flush_line "Updating...";
   let index = List.fold_left run_update index update_batch in
-  flush_line "Saving index";
   save_index index;
   if List.length update_batch < batch_size then index else run_update_batches index
 
@@ -279,42 +318,26 @@ let run_updates () =
   flush_line ("Finished updating at update: " ^ (string_of_int index.last_update));
   flush_line "Ok"
 
-(* Initialising index *)
-
-let init_index () =
-  flush_line ("couchdb is at " ^ couchdb_url);
-  print_string "This will erase the existing index. Are you sure? (y/n):"; flush stdout;
-  if read_line () = "y"
-  then
-    (flush_line "Saving index";
-     save_index { last_update = -1 ; bktree = Bktree.empty };
-     flush_line "Ok")
-  else
-    flush_line "Ok, nothing was done"
-
 (* Introspection *)
-
-module DoiMap = Bktree.DoiMap
 
 let list_all () =
   flush_line ("couchdb is at " ^ couchdb_url);
   flush_line "Loading index";
   let index = load_index () in
-  DoiMap.iter
-    (fun doi eqns -> 
-      flush_line ((decode_doi doi) ^ " (" ^ (string_of_int (List.length eqns)) ^ " equations)"))
-    (Bktree.doi_map index.bktree)
+  Doi_map.iter
+    (fun doi (journalID, publicationYear, no_eqns) -> 
+      flush_line ((decode_doi doi) ^ " journalID=" ^ journalID ^ " no_equations=" ^ (string_of_int no_eqns)))
+    index.metadata
 
 let list_one doi =
+  let doi = encode_doi doi in
   flush_line ("couchdb is at " ^ couchdb_url);
   flush_line "Loading index";
   let index = load_index () in
   flush_line ("Searching for " ^ doi);
   try
-    let eqns = DoiMap.find (encode_doi doi) (Bktree.doi_map index.bktree) in
-    let journalID = (get_document (encode_doi doi))#journalID in
-    flush_line ("DOI indexed with journal ID: " ^ journalID ^ " and equation ids:");
-    List.iter (fun (id,_) -> flush_line id) eqns
+    let (journalID, publicationYear, no_eqns) = Doi_map.find (encode_doi doi) index.metadata in
+    flush_line ((decode_doi doi) ^ " journalID=" ^ journalID ^ " no_equations=" ^ (string_of_int no_eqns))
   with Not_found ->
     flush_line "DOI not indexed"
 
