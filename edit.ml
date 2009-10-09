@@ -1,6 +1,6 @@
 (*
 Calculation of the Levensthein edit distance between two latex strings.
-The calculation is left-biased: the left string is matched to a substring of the right string
+The calculation is left-biased: the left string is matched to any substring of the right string
 *)
 
 open Latex
