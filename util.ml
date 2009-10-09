@@ -9,14 +9,6 @@ let filter_map f ls =
       (fun l -> l != None) 
       (List.map f ls)))
 
-let rec take k ls =
-  if k <= 0 then [] else
-  match ls with
-    | [] -> []
-    | (l::ls) -> l :: take (k-1) ls
+(* Fairly hackish method of sucking out stream elements *)
+let list_of_stream stream = Stream.npeek max_int stream 
 
-let rec drop k ls =
-  if k <= 0 then ls else
-  match ls with
-    | [] -> []
-    | (l::ls) -> drop (k-1) ls
