@@ -42,13 +42,14 @@ def testSubstring(doi):
   eqnID, source = rand.choice(db[doi]['source'].items())
   searchTerm = substring(eqnID, source)
   url = "http://localhost:%s/documents/_external/index?searchTerm=\"%s\"&searchTimeout=20&limit=2500" % (port, urllib.quote(searchTerm))
-  print urllib.urlopen(url).read()
   resultsFile = urllib.urlopen(url)
   results = minidom.parse(resultsFile)
   for result in results.getElementsByTagName("result"):
     if result.attributes.get('doi').value == decodeDoi(doi):
-      print "Passed on doi: %s and eqnID %s" % (doi, eqnID)
-      return True
+      for eqn in result.getElementsByTagName("equation"):
+        if eqn.attributes.get('id').value == eqnID:
+          print "Passed on doi: %s and eqnID %s" % (doi, eqnID)
+          return True
   print "Failed on doi: %s and eqnID %s" % (doi, eqnID)
   return False
 
