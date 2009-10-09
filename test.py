@@ -1,134 +1,76 @@
 #!/bin/env python
-import sys, os, os.path, httplib, urllib
+import os, sys, httplib, urllib
 from xml.dom import minidom
-import simplejson as json
-from util import expectResponse
+from util import decodeDoi
 import random
-from preprocessor import *
+from preprocessor import PlainProcessor, parseLaTeX
+import couchdb.client
+from db import couchdb_server, port
 
-# Bulk process a xml document
-def loadXml(fileName):
-  # Collect docs
-  docs = []
+rand = random.Random()
 
-  for root, _, files in os.walk(arg):
-    for fi in files:
-      if fi.endswith(".xml"):
-        xml = minidom.parse(os.path.join(root,fi))
+def pruneNode(node):
+#  if node.childNodes:
+#    start = rand.randint(0, len(node.childNodes)-1)
+#    end = rand.randint(0, len(node.childNodes)-1)
+#    if start>end:
+#      start, end = end, start
+#    pruneNode(node.childNodes[start])
+#    pruneNode(node.childNodes[end])
+#    del node.childNodes[end:len(node.childNodes)]
+#    del node.childNodes[0:start] 
 
-        for article in xml.getElementsByTagName("Article"):
-          doi = article.getElementsByTagName("ArticleDOI")[0].childNodes[0].wholeText
+  # For now just use the whole node
+  return node
 
-          source = []
-          for eqn in article.getElementsByTagName("Equation") + article.getElementsByTagName("InlineEquation"):
-            source.append(eqn.getElementsByTagName("EquationSource")[0].childNodes[0].wholeText)
-          
-          if source:
-            doc = {'doi': doi, 'source': source}
-            docs.append(doc)
+# Return a random (and syntacically correct) substring of a latex string
+def substring(eqnID, latex):
+  try:  
+    node = parseLaTeX("\\begin{document} $$ " + latex + " $$ \\end{document}")
+    pruneNode(node)
+    result = PlainProcessor().process(node).dumps()
+    return result
+  except KeyboardInterrupt, e:
+    raise e
+  #except Exception, e:
+  # print "Note: Pruner failed on equation %s : %s" % (eqnID, e)
+  # return None
 
-  return docs
+# Search for a substring of an existing equation and check that the parent article is included in the results
+def testSubstring(doi):
+  db = couchdb_server['documents']
+  eqnID, source = rand.choice(db[doi]['source'].items())
+  searchTerm = substring(eqnID, source)
+  url = "http://localhost:%s/documents/_external/index?searchTerm=\"%s\"&searchTimeout=20&limit=2500" % (port, urllib.quote(searchTerm))
+  print urllib.urlopen(url).read()
+  resultsFile = urllib.urlopen(url)
+  results = minidom.parse(resultsFile)
+  for result in results.getElementsByTagName("result"):
+    if result.attributes.get('doi').value == decodeDoi(doi):
+      print "Passed on doi: %s and eqnID %s" % (doi, eqnID)
+      return True
+  print "Failed on doi: %s and eqnID %s" % (doi, eqnID)
+  return False
 
-def testIndex(docs,n,server):
-  successes = 0
-  empties = 0
-  failures = 0
-  errors = 0
-
+def runTest(n):
+  db = couchdb_server['documents']
+  dois = list(db)
   for i in xrange(0,n):
-    searchDoc = random.choice(docs)
-    searchDoi = searchDoc['doi']
-    searchTerm = random.choice(searchDoc['source'])
-    try:
-      conn = httplib.HTTPConnection(server)
-      # urllib.quote fails on unicode input, not much we can do about it
-      conn.request("GET", "/documents/_external/index?format=xml&searchTerm=\"%s\"" % urllib.quote(searchTerm))
-      result = expectResponse(conn,200)
-      xml = minidom.parseString(result)
-      results = xml.childNodes[0]
-      if len(results.childNodes) > 1:
-        topResult = results.childNodes[1]
-        doi = topResult.attributes['doi'].childNodes[0].wholeText
-        if doi == searchDoi:
-          print "Test %d: success (%d results)" % (i, len(results.childNodes) - 1)
-          successes += 1
-        else:
-          failures += 1
-          print "Test %d: wrong result" % i
-          print searchDoi, doi
-          print searchTerm
-      else:
-        empties += 1
-        print "Test %d: no results" % i
-        print searchDoi
-        print searchTerm
-        print result
-    except Exception, e:
-      errors += 1
-      print "Test %d: %s" % (i,e)
-
-  print "Successes %d, empties %d, failures %d, errors %d" % (successes,empties,failures,errors)
-
-def callPreprocessor(source,server):
-  conn = httplib.HTTPConnection(server)
-  conn.request("GET", "/documents/_external/preprocess?format=json&latex=%s" % urllib.quote(source))
-  return json.loads(expectResponse(conn,200))
-
-def testPreprocessor(docs,n,server):
-  successes = 0
-  failures = 0
-  errors = 0
-
-  sources = []
-  for doc in docs:
-    sources.extend(doc['source'])
-  for source in random.sample(sources,n):
-    try:
-      result1 = callPreprocessor(source,server)
-      result2 = callPreprocessor(source,server)
-      if (result1 == result2):
-        successes += 1
-        print "Test succeeded"
-      else:
-        failures += 1
-        print "Test failed: inconsistent results"
-        print source
-        print result1
-        print result2
-    except Exception, e:
-      errors += 1
-      print "Test failed: error"
-      print e
-
-  print "Successes %d, failures %d, errors %d" % (successes,failures,errors)
-
-def previewPreprocessor(docs,n):
-  sources = []
-  for doc in docs:
-    sources.extend(doc['source'])
-  for source in random.sample(sources,n):
-    print source
-    tex = preprocess(source)
-    plainRenderer = PlainRenderer()
-    render(tex,plainRenderer)
-    print plainRenderer.dumps()
-    print
+    doi = rand.choice(dois)
+    while not db[doi]['source']:
+      doi = rand.choice(dois)
+    testSubstring(doi)
 
 import getopt
 
 if __name__ == '__main__':
-  opts, args = getopt.getopt(sys.argv[1:], "", ["file=","n=","server="])
+  opts, args = getopt.getopt(sys.argv[1:], "", ["n="])
   docs = []
   n = 100
   server = "localhost:5984"
   for opt, arg in opts:
-    if opt == "--file":
-      docs = loadXml(arg)
     if opt == "--n":
       n = int(arg)
-    if opt == "--server":
-      server = arg
-  testIndex(docs,n,server)
-  #testPreprocessor(docs,n,server)
-  #previewPreprocessor(docs,n)
+  runTest(n)
   print "Ok"
+
