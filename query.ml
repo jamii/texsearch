@@ -1,13 +1,10 @@
 (* Compound boolean queries *)
 
-open Genlex
-
 (* The query type *)
 type t =
   | Latex of Latex.t * string (* Store the string version so we can send the query back to the users *)
   | And of t * t
   | Or of t * t
-  | Not of t
 
 (* Longest latex string in query *)
 let rec max_length query =
@@ -15,12 +12,12 @@ let rec max_length query =
     | Latex (latex,_) -> Array.length latex
     | And (query1,query2) -> max (max_length query1) (max_length query2)
     | Or (query1,query2) -> max (max_length query1) (max_length query2)
-    | Not query -> max_length query
 
 open Str
+open Genlex
 
-(* Quick and dirty lexer, tokens are: "latexstring" ) ( AND OR NOT *)
-let tokens = regexp "\"[^\"]*\"\|(\|)\|AND\|OR\|NOT"
+(* Quick and dirty lexer, tokens are: "latexstring" ) ( AND OR *)
+let tokens = regexp "\"[^\"]*\"\|(\|)\|AND\|OR"
 let lex str =
   List.filter
     (fun token -> match token with
@@ -31,12 +28,10 @@ let lex str =
 exception Parse_error
 
 (* A simple recursive descent parser. Not the prettiest but yacc would be overkill *)
+(* Might be worth using the campl4 parse extension *)
 let parse_query preprocesser tokens =
   let rec parse_atom tokens =
     match tokens with
-      | Delim "NOT" :: rest ->
-          let (query,rest) = parse_atom rest in
-          parse_compound (Not query) rest
       | Delim "(" :: rest ->
           let (query,rest) = parse_atom rest in
           (match rest with
@@ -56,7 +51,7 @@ let parse_query preprocesser tokens =
       | Delim "OR" :: rest ->
           let (query2,rest) = parse_atom rest in
           (Or (query1,query2), rest)
-      | Delim "(" :: rest | Delim "NOT" :: rest -> raise Parse_error
+      | Delim "(" :: rest -> raise Parse_error
       | Delim ")" :: rest -> (query1, tokens)
       | [] -> (query1,[])
       | _ -> raise Parse_error in
@@ -71,4 +66,12 @@ let rec to_string query =
     | Latex (_,plain) -> "\"" ^ plain ^ "\""
     | And (query1,query2) -> "(" ^ (to_string query1) ^ " AND " ^ (to_string query2) ^ ")"
     | Or (query1,query2) -> "(" ^ (to_string query1) ^ " OR " ^ (to_string query2) ^ ")"
-    | Not query -> "(NOT " ^ (to_string query) ^ ")"
+
+(* Extending the edit distance on latex strings to edit distance on compound queries *)
+(* With the Edit.left_edit_distance as a quasi-metric this is a valid query for the bktree index *)
+
+let rec query_dist query latex =
+  match query with
+    | Latex (query_latex,_) -> Edit.left_edit_distance query_latex latex
+    | And (query1,query2) -> max (query_dist query1 latex) (query_dist query2 latex)
+    | Or (query1,query2) -> min (query_dist query1 latex) (query_dist query2 latex)
