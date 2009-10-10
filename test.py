@@ -40,18 +40,31 @@ def substring(eqnID, latex):
 def testSubstring(doi):
   db = couchdb_server['documents']
   eqnID, source = rand.choice(db[doi]['source'].items())
-  searchTerm = substring(eqnID, source)
-  url = "http://localhost:%s/documents/_external/index?searchTerm=\"%s\"&searchTimeout=20&limit=2500" % (port, urllib.quote(searchTerm))
-  resultsFile = urllib.urlopen(url)
-  results = minidom.parse(resultsFile)
-  for result in results.getElementsByTagName("result"):
-    if result.attributes.get('doi').value == decodeDoi(doi):
-      for eqn in result.getElementsByTagName("equation"):
-        if eqn.attributes.get('id').value == eqnID:
-          print "Passed on doi: %s and eqnID %s" % (doi, eqnID)
-          return True
-  print "Failed on doi: %s and eqnID %s" % (doi, eqnID)
-  return False
+  try:
+    searchTerm = substring(eqnID, source)
+    url = "http://localhost:%s/documents/_external/index?searchTerm=\"%s\"&searchTimeout=20&limit=10000" % (port, urllib.quote(searchTerm))
+    resultsFile = urllib.urlopen(url)
+    results = minidom.parse(resultsFile)
+    if results.getElementsByTagName("TimedOut"):
+      print "Timed out on doi: %s and eqnID %s" % (decodeDoi(doi), eqnID)
+      return False
+    if results.getElementsByTagName("LimitExceeded"):
+      print "Limit exceeded on doi: %s and eqnID %s" % (decodeDoi(doi), eqnID)
+      return False
+    for result in results.getElementsByTagName("result"):
+      if result.attributes.get('doi').value == decodeDoi(doi):
+        for eqn in result.getElementsByTagName("equation"):
+          if eqn.attributes.get('id').value == eqnID:
+            print "Passed on doi: %s and eqnID %s" % (decodeDoi(doi), eqnID)
+            return True
+    print "Failed on doi: %s and eqnID %s" % (doi, eqnID)
+    return False
+  except KeyboardInterrupt, e:
+    raise e
+  except Exception, e:
+    print "Error on doi: %s and eqnID %s" % (decodeDoi(doi), eqnID)
+    print e
+    return False
 
 def runTest(n):
   db = couchdb_server['documents']
