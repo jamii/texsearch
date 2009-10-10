@@ -46,23 +46,23 @@ def testSubstring(doi):
     resultsFile = urllib.urlopen(url)
     results = minidom.parse(resultsFile)
     if results.getElementsByTagName("TimedOut"):
-      print "Timed out on doi: %s and eqnID %s" % (decodeDoi(doi), eqnID)
+      print "Timed out on doi: %s and eqnID: %s" % (decodeDoi(doi), eqnID)
       return False
     if results.getElementsByTagName("LimitExceeded"):
-      print "Limit exceeded on doi: %s and eqnID %s" % (decodeDoi(doi), eqnID)
+      print "Limit exceeded on doi: %s and eqnID: %s" % (decodeDoi(doi), eqnID)
       return False
     for result in results.getElementsByTagName("result"):
       if result.attributes.get('doi').value == decodeDoi(doi):
         for eqn in result.getElementsByTagName("equation"):
           if eqn.attributes.get('id').value == eqnID:
-            print "Passed on doi: %s and eqnID %s" % (decodeDoi(doi), eqnID)
+            print "Passed on doi: %s and eqnID: %s" % (decodeDoi(doi), eqnID)
             return True
-    print "Failed on doi: %s and eqnID %s" % (doi, eqnID)
+    print "Failed on doi: %s and eqnID: %s" % (doi, eqnID)
     return False
   except KeyboardInterrupt, e:
     raise e
   except Exception, e:
-    print "Error on doi: %s and eqnID %s" % (decodeDoi(doi), eqnID)
+    print "Error on doi: %s and eqnID: %s" % (decodeDoi(doi), eqnID)
     print e
     return False
 
