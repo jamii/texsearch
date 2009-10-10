@@ -277,24 +277,27 @@ exception FailedUpdate of int * doi
 
 let run_update index update =
   try
-    (* Start by deleting old version of the document *)
-    let index_tree = 
-      match Index_tree.filter (fun eqn_node -> eqn_node.doi != update#id) index.index_tree with
-        | Some index_tree -> index_tree
-        (* We somehow managed to delete the dummy node at the base of the tree *)
-        | None -> raise (FailedUpdate (update#key, update#id)) in
-    let metadata = Doi_map.remove update#id index.metadata in
+    (* Start by deleting old version of the document if it already exists *)
+    let index = 
+      if not (Doi_map.mem update#id index.metadata) then index else
+      let index_tree = 
+        match Index_tree.filter (fun eqn_node -> eqn_node.doi != update#id) index.index_tree with
+          | Some index_tree -> index_tree
+          (* We somehow managed to delete the dummy node at the base of the tree *)
+          | None -> raise (FailedUpdate (update#key, update#id)) in
+      let metadata = Doi_map.remove update#id index.metadata in
+      {index with index_tree=index_tree; metadata=metadata} in
     (* Add the new version of the documents if the deleted flag is not set *)
     match (update#doc, update#value#deleted) with
-      | (None, _) | (_,true) -> {last_update=update#key; index_tree=index_tree; metadata=metadata}
+      | (None, _) | (_,true) -> {index with last_update=update#key}
       | (Some json, false) ->
           let doc = document_of_json json in
           let index_tree =
             List.fold_left 
               (fun index_tree (eqnID,latex) -> Index_tree.add {doi=update#id; eqnID=eqnID; latex=latex} index_tree)
-              index_tree
+              index.index_tree
               doc#content in
-          let metadata = Doi_map.add update#id (doc#journalID, doc#publicationYear, List.length doc#content) metadata in
+          let metadata = Doi_map.add update#id (doc#journalID, doc#publicationYear, List.length doc#content) index.metadata in
           {last_update=update#key; index_tree=index_tree; metadata=metadata}
   with _ ->
     raise (FailedUpdate (update#key, update#id))
