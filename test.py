@@ -41,6 +41,7 @@ def substring(eqnID, latex):
 def testSubstring(doi):
   db = couchdb_server['documents']
   eqnID, source = rand.choice(db[doi]['source'].items())
+  results = None
   try:
     searchTerm = substring(eqnID, source)
     url = "http://localhost:%s/documents/_external/index?searchTerm=\"%s\"&searchTimeout=20&limit=10000" % (port, urllib.quote(searchTerm))
@@ -64,12 +65,14 @@ def testSubstring(doi):
             print "Passed on doi: %s and eqnID: %s (%fs)" % (decodeDoi(doi), eqnID, endTime-startTime)
             return True
     print "Failed on doi: %s and eqnID: %s (%fs)" % (doi, eqnID, endTime-startTime)
+    print searchTerm
     return False
   except KeyboardInterrupt, e:
     raise e
   except Exception, e:
     print "Error on doi: %s and eqnID: %s (%fs)" % (decodeDoi(doi), eqnID, 0)
     print e
+    print results
     return False
 
 def runTest(n):
