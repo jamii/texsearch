@@ -150,9 +150,7 @@ let xml_of_results results query_string =
     Xml.Element ("query",[],[Xml.PCData query_string]) in
   Xml.Element ("results", [], xml_of_query_string :: (List.map xml_of_result results))
 
-let xml_of_limit_exceeded = Xml.Element ("LimitExceeded",[],[])
-
-let xml_of_timeout = Xml.Element ("TimedOut",[],[])
+let xml_error error = Xml.Element (error,[],[])
 
 let xml_response xml = 
   Json_type.Object
@@ -201,7 +199,7 @@ let run_query index query filter limit =
   let doi_map = Doi_map.remove "" doi_map in
   if Doi_map.count doi_map > limit 
   then 
-    xml_of_limit_exceeded
+    xml_error "LimitExceeded"
   else
     let results = Doi_map.list_of doi_map in
     let results = List.filter (fun (doi,_) -> filter doi) results in
@@ -225,9 +223,9 @@ let handle_query index str =
       &&  ((args#publishedAfter  = None) || ((args#publishedAfter  <= publicationYear) && (publicationYear != None))) in
     xml_response (with_timeout searchTimeout (fun () -> run_query index query filter limit))
   with
-    | Json_type.Json_error _ | Failure _ | Query.Parse_error ->
-        Json_type.Object [("code",Json_type.Int 400)] (* Bad request *)
-    | Timeout -> xml_response xml_of_timeout
+    | Json_type.Json_error _ | Failure _ -> xml_response (xml_error "ArgParseError")
+    | Query.Parse_error -> xml_response (xml_error "LatexParseError")
+    | Timeout -> xml_response (xml_error "TimedOut")
     | _ -> Json_type.Object [("code",Json_type.Int 500)] (* Internal server error *)
 
 let handle_queries () =

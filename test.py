@@ -48,6 +48,9 @@ def testSubstring(doi):
     resultsFile = urllib.urlopen(url)
     endTime = time.time()
     results = minidom.parse(resultsFile)
+    if results.getElementsByTagName("LatexParseError"):
+      print "Latex parse error on doi: %s and eqnID: %s (%fs)" % (decodeDoi(doi), eqnID, endTime-startTime)
+      return False
     if results.getElementsByTagName("TimedOut"):
       print "Timed out on doi: %s and eqnID: %s (%fs)" % (decodeDoi(doi), eqnID, endTime-startTime)
       return False

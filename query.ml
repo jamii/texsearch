@@ -59,7 +59,11 @@ let parse_query preprocesser tokens =
  match parse_atom tokens with
   | (query,_) -> query
 
-let of_string preprocesser str = parse_query preprocesser (lex str)
+let of_string preprocesser str = 
+  try
+    parse_query preprocesser (lex str)
+  with _ ->
+    raise Parse_error (* Dont care whether the error was parsing the query or preprocessing the latex *)
 
 let rec to_string query =
   match query with
