@@ -180,7 +180,7 @@ let with_timeout tsecs f =
 (* Queries *)
 
 (* The choice of cutoff is completely arbitrary *)
-let cutoff_length query = 1 + (min 5 (Query.max_length query / 3))
+let cutoff_length query = 1 + (min 3 (Query.max_length query / 3))
 
 let run_query index query filter limit =
   let eqns = 
