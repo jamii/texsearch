@@ -37,24 +37,27 @@ ignoreSet = frozenset([
 ,'array'
 ])
 
-def isMathMode(obj):
-  return True
-
 class BadProcess(Exception):
   pass
 
 class Processor:
   def __init__(self):
-    pass
+    self.textNode = False
   
   def process(self,node):
+    if node.nodeName == 'text':
+      self.textNode = True
     if node.nodeType == Node.TEXT_NODE:
       # Short circuit text nodes
       text = unicode(node)
-      # Would prefer to keep text nodes in one piece but plasTeX has a nasty habit of concatenating adjacent characters even in mathmode
-      for char in text:
-        if char != ' ':
-          self.addText(char)
+      # Unfortunately plasTeX does not place \text node arguments under text nodes
+      if self.textNode:
+        self.addText(text)
+        self.textNode = False
+      else:
+        for char in text:
+          if char != ' ':
+            self.addText(char)
     elif node.nodeName in ignoreSet:
       # Ignore node and move on to children
       for child in node.childNodes:
@@ -98,6 +101,7 @@ class Processor:
 # Converts a plasTeX DOM tree into a json tree #
 class JsonProcessor(Processor):
   def __init__(self):
+    self.textNode = False
     self.text = [[]]
     self.macros = []
 
@@ -129,6 +133,7 @@ class JsonProcessor(Processor):
 # Converts a plasTeX DOM tree back into plain LaTeX
 class PlainProcessor(Processor):
   def __init__(self):
+    self.textNode = False
     self.text = []
     self.macros = 0
 
@@ -235,7 +240,6 @@ def main():
 
     sys.stdout.write("%s\n" % json.dumps(response))
     sys.stdout.flush()
-    
 
 if __name__ == "__main__":
     main()
