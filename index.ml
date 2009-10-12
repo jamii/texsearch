@@ -328,7 +328,9 @@ let list_all () =
   Doi_map.iter
     (fun doi (journalID, publicationYear, no_eqns) -> 
       flush_line ((decode_doi doi) ^ " journalID=" ^ journalID ^ " no_equations=" ^ (string_of_int no_eqns)))
-    index.metadata
+    index.metadata;
+  let no_eqns = Doi_map.fold (fun _ (_,_,no_eqns) total -> no_eqns+total) index.metadata 0 in
+  flush_line ("Total number of equations: " ^ (string_of_int no_eqns))
 
 let list_one doi =
   let doi = encode_doi doi in
@@ -342,6 +344,15 @@ let list_one doi =
   with Not_found ->
     flush_line "DOI not indexed"
 
+let list_nodes () =
+  flush_line ("couchdb is at " ^ couchdb_url);
+  flush_line "Loading index";
+  let index = load_index () in
+  List.iter
+    (fun eqn_node ->
+      flush_line (string_of_int (Array.length eqn_node.latex)))
+    (Index_tree.to_list index.index_tree)
+
 (* Main *)
 
 open Arg
@@ -350,6 +361,7 @@ let _ = parse
   ;("-update", Unit run_updates, ": Update the index")
   ;("-query", Unit handle_queries, ": Handle index queries as a couchdb _external")
   ;("-list_all", Unit list_all, ": List all indexed keys")
-  ;("-list", String list_one, ": List the entry for a given key")]
+  ;("-list", String list_one, ": List the entry for a given key")
+  ;("-list_nodes", Unit list_nodes, ": Debugging tool: list the lengths of each equation node")]
   ignore
   "Use 'index -help' for available options"
