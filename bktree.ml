@@ -82,8 +82,9 @@ struct
 
   let rec size bktree = 1 + (IntMap.fold (fun _ child total -> total + size child) bktree.children 0)
 
-  let to_bucket d = d / 3
-  let from_bucket d = ((d + 1) * 3) - 1
+  let bucket_size = 5
+  let to_bucket d = if d < bucket_size then d else -d/bucket_size
+  let from_bucket d = if d >= 0 then d else ((-d+1)*bucket_size)-1 (* from_bucket d = max { x | to_bucket x = d } *)
 
   let rec add node bktree =
     let bucket = to_bucket (dist node bktree.root_node) in
