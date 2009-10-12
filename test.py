@@ -6,6 +6,7 @@ import random
 from preprocessor import PlainProcessor, parseLaTeX
 import couchdb.client
 from db import couchdb_server, port
+import time
 
 rand = random.Random()
 
@@ -43,26 +44,28 @@ def testSubstring(doi):
   try:
     searchTerm = substring(eqnID, source)
     url = "http://localhost:%s/documents/_external/index?searchTerm=\"%s\"&searchTimeout=20&limit=10000" % (port, urllib.quote(searchTerm))
+    startTime = time.time()
     resultsFile = urllib.urlopen(url)
+    endTime = time.time()
     results = minidom.parse(resultsFile)
     if results.getElementsByTagName("TimedOut"):
-      print "Timed out on doi: %s and eqnID: %s" % (decodeDoi(doi), eqnID)
+      print "Timed out on doi: %s and eqnID: %s (%fs)" % (decodeDoi(doi), eqnID, endTime-startTime)
       return False
     if results.getElementsByTagName("LimitExceeded"):
-      print "Limit exceeded on doi: %s and eqnID: %s" % (decodeDoi(doi), eqnID)
+      print "Limit exceeded on doi: %s and eqnID: %s (%fs)" % (decodeDoi(doi), eqnID, endTime-startTime)
       return False
     for result in results.getElementsByTagName("result"):
       if result.attributes.get('doi').value == decodeDoi(doi):
         for eqn in result.getElementsByTagName("equation"):
           if eqn.attributes.get('id').value == eqnID:
-            print "Passed on doi: %s and eqnID: %s" % (decodeDoi(doi), eqnID)
+            print "Passed on doi: %s and eqnID: %s (%fs)" % (decodeDoi(doi), eqnID, endTime-startTime)
             return True
-    print "Failed on doi: %s and eqnID: %s" % (doi, eqnID)
+    print "Failed on doi: %s and eqnID: %s (%fs)" % (doi, eqnID, endTime-startTime)
     return False
   except KeyboardInterrupt, e:
     raise e
   except Exception, e:
-    print "Error on doi: %s and eqnID: %s" % (decodeDoi(doi), eqnID)
+    print "Error on doi: %s and eqnID: %s (%fs)" % (decodeDoi(doi), eqnID, 0)
     print e
     return False
 
