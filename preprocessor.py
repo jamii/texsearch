@@ -45,7 +45,7 @@ class Processor:
     self.textNode = False
   
   def process(self,node):
-    if node.nodeName == 'text':
+    if node.nodeName.startswith('text'):
       self.textNode = True
     if node.nodeType == Node.TEXT_NODE:
       # Short circuit text nodes
