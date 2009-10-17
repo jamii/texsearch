@@ -1,5 +1,5 @@
 #!/bin/env python
-import os, sys, httplib, urllib
+import os, sys, httplib, urllib, socket
 from xml.dom import minidom
 from util import decodeDoi
 import random
@@ -82,10 +82,16 @@ def runTests(n,transform):
   db = couchdb_server['documents']
   dois = list(db)
   for i in xrange(0,n):
-    doi = rand.choice(dois)
-    while not db[doi]['source']:
-      doi = rand.choice(dois)
-    testSubstring(doi)
+    doi = None
+    source = None
+    while not source:
+      try:
+        doi = rand.choice(dois)
+        source = db[doi]['source']
+      except socket.error:
+        pass # Connection refused, probably because someone restarted the server
+    runTest(doi,transform)
+    sys.stdout.flush()
 
 import getopt
 
