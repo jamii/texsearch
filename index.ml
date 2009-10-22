@@ -224,7 +224,7 @@ let handle_query index str =
     xml_response (with_timeout searchTimeout (fun () -> run_query index query filter limit))
   with
     | Json_type.Json_error _ | Failure _ -> xml_response (xml_error "ArgParseError")
-    | Query.Parse_error -> xml_response (xml_error "LatexParseError")
+    | Query.Parse_error -> xml_response (xml_error "QueryParseError")
     | Timeout -> xml_response (xml_error "TimedOut")
     | _ -> Json_type.Object [("code",Json_type.Int 500)] (* Internal server error *)
 
