@@ -44,7 +44,7 @@ def runTest(doi,transform):
   searchTerm = None
   try:
     searchTerm = transform(source)
-    url = "http://localhost:%s/documents/_external/index?searchTerm=\"%s\"&searchTimeout=20&limit=10000" % (port, urllib.quote(searchTerm))
+    url = "http://localhost:%s/documents/_external/index?searchTerm=\"%s\"&searchTimeout=20&limit=2500" % (port, urllib.quote(searchTerm))
     startTime = time.time()
     resultsFile = urllib.urlopen(url)
     endTime = time.time()

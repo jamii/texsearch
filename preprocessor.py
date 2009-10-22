@@ -241,5 +241,8 @@ def main():
     sys.stdout.write("%s\n" % json.dumps(response))
     sys.stdout.flush()
 
+def dumps(latex):
+  return JsonProcessor().process(parseLaTeX("\\begin{document} $$" + latex + "$$ \\end{document}")).dumps()
+
 if __name__ == "__main__":
     main()
