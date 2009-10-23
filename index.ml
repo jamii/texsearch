@@ -14,7 +14,7 @@ and publicationYear = string
 and document =
   < journalID : journalID
   ; publicationYear : publicationYear option
-  ; content : (string * Latex.t) assoc (* eqnID*Latex.t *)
+  ; content : (string * Json_type.t) assoc (* eqnID*Latex.t *)
   ; source : (string * string) assoc > (* eqnID*string *)
 
 and request =
@@ -38,7 +38,7 @@ and updates =
   < rows : update list >
 
 and preprocessed =
-  < json : Latex.t
+  < json : Json_type.t
   ; plain : string >
 
 type eqn_node = 
@@ -57,20 +57,17 @@ let decode_doi doi = Str.global_replace (Str.regexp "_") "/" doi
 
 let flush_line str = print_string str; print_string "\n"; flush stdout
 
-module Doi_map = 
-struct
-  include Map.Make (struct
-    type t = doi
-    let compare = compare
-  end)
+module Doi_map = Util.Make_map 
+(struct
+  type t = doi
+  let compare = compare
+end)
 
-  let update key f default map =
-    add key (try f (find key map) with Not_found -> default) map
-
-  let count map = fold (fun _ _ n -> n+1) map 0
-
-  let list_of map = fold (fun k v rest -> (k,v) :: rest) map []
-end
+module Eqnid_map = Util.Make_map 
+(struct
+  type t = eqnID
+  let compare = compare
+end)
 
 (* Our main index structure *)
 
@@ -135,7 +132,7 @@ let get_document doi =
 let preprocess timeout latex_string =
   let url = db_url ^ "_external/preprocess?format=json-plain&timeout=" ^ (encode timeout) ^ "&latex=" ^ (encode latex_string) in
   let preprocessed = preprocessed_of_json (Json_io.json_of_string (Http.http_get url)) in
-  (preprocessed#json,preprocessed#plain)
+  (Latex.lines_of_json preprocessed#json,preprocessed#plain)
 
 (* Responses to couchdb *)
 
@@ -178,7 +175,7 @@ let with_timeout tsecs f =
 (* Queries *)
 
 (* The choice of cutoff is completely arbitrary *)
-let cutoff_length query = 1 + (min 3 (Query.max_length query / 3))
+let cutoff_length query = 1 + (min 5 (Query.max_length query / 3))
 
 let run_query index query filter limit =
   let eqns = 
@@ -195,6 +192,8 @@ let run_query index query filter limit =
         Doi_map.update key (fun values -> value::values) [value] doi_map)
       Doi_map.empty      
       eqns in
+  (* Remove duplicate eqnID resulting from matches on multiple lines *)
+  (* TODO *)
   (* Remove the dummy node *)
   let doi_map = Doi_map.remove "" doi_map in
   if Doi_map.count doi_map > limit 
@@ -292,7 +291,12 @@ let run_update index update =
           let doc = document_of_json json in
           let index_tree =
             List.fold_left 
-              (fun index_tree (eqnID,latex) -> Index_tree.add {doi=update#id; eqnID=eqnID; latex=latex} index_tree)
+              (fun index_tree (eqnID,json) -> 
+                let lines = Latex.lines_of_json json in
+                List.fold_left 
+                  (fun index_tree latex -> Index_tree.add {doi=update#id; eqnID=eqnID; latex=latex} index_tree)
+                  index_tree
+                  lines)
               index.index_tree
               doc#content in
           let metadata = Doi_map.add update#id (doc#journalID, doc#publicationYear, List.length doc#content) index.metadata in

@@ -2,14 +2,14 @@
 
 (* The query type *)
 type t =
-  | Latex of Latex.t * string (* Store the string version so we can send the query back to the users *)
+  | Latex of (Latex.t list) * string (* Store the string version so we can send the query back to the users *)
   | And of t * t
   | Or of t * t
 
 (* Longest latex string in query *)
 let rec max_length query =
   match query with
-    | Latex (latex,_) -> Array.length latex
+    | Latex (lines,_) -> Util.maximum (List.map Array.length lines)
     | And (query1,query2) -> max (max_length query1) (max_length query2)
     | Or (query1,query2) -> max (max_length query1) (max_length query2)
 
@@ -39,8 +39,8 @@ let parse_query preprocesser tokens =
             | _ -> raise Parse_error)
       | Delim "AND" :: rest | Delim "OR" :: rest | Delim ")" :: rest -> raise Parse_error
       | Delim latex_string :: rest ->
-          let (latex,plain) = preprocesser (String.sub latex_string 1 (String.length latex_string - 2)) in
-          parse_compound (Latex (latex,plain)) rest
+          let (lines,plain) = preprocesser (String.sub latex_string 1 (String.length latex_string - 2)) in
+          parse_compound (Latex (lines,plain)) rest
       | _ -> raise Parse_error
 
   and parse_compound query1 tokens =
@@ -76,6 +76,6 @@ let rec to_string query =
 
 let rec query_dist query latex =
   match query with
-    | Latex (query_latex,_) -> Edit.left_edit_distance query_latex latex
+    | Latex (lines,_) -> Util.minimum (List.map (fun line -> Edit.left_edit_distance line latex) lines)
     | And (query1,query2) -> max (query_dist query1 latex) (query_dist query2 latex)
     | Or (query1,query2) -> min (query_dist query1 latex) (query_dist query2 latex)
