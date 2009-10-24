@@ -203,9 +203,9 @@ let run_query index query filter limit =
     let results = Doi_map.list_of doi_map in
     let results = List.filter (fun (doi,_) -> filter doi) results in
     (* Sort each set of equations by weight *)
-    let results = List.map (fun (doi,eqns) -> (doi,List.sort (fun a b -> compare (snd a) (snd b)) eqns)) results in
+    let results = List.map (fun (doi,eqns) -> (doi,List.fast_sort (fun a b -> compare (snd a) (snd b)) eqns)) results in
     (* Sort doi's by lowest weighted equation *)
-    let results = List.sort (fun (_,eqnsA) (_,eqnsB) -> compare (snd (List.hd eqnsA)) (snd (List.hd eqnsB))) results in
+    let results = List.fast_sort (fun (_,eqnsA) (_,eqnsB) -> compare (snd (List.hd eqnsA)) (snd (List.hd eqnsB))) results in
     xml_of_results results (Query.to_string query)
 
 let handle_query index str =
