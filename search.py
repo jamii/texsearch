@@ -1,29 +1,53 @@
 #!/bin/env python
 import urllib
+import time
+from xml.dom import minidom
+from db import port, couchdb_server
+from util import encodeDoi
 
-def search(searchTerm, searchTimeout, limit, server):
-  url = "http://%s/documents/_external/index?searchTerm=\"%s\"&searchTimeout=%d&limit=%d" % (server, urllib.quote(searchTerm), searchTimeout, limit)
-  return urllib.urlopen(url).read()
+def parseResults(results):
+  db = couchdb_server['documents']
+  for result in results.getElementsByTagName("result"):
+    doi = result.attributes.get('doi').value
+    source = db[encodeDoi(doi)]['source']
+    eqns = [(eqn.attributes.get('id').value, eqn.attributes.get('distance').value) for eqn in result.getElementsByTagName("equation")]
+    yield (doi, [(eqnID, distance, source[eqnID]) for (eqnID, distance) in eqns])
 
-import sys, getopt
+def search(searchTerm, searchTimeout=20.0, limit=2500):
+  response = {}
 
-if __name__ == '__main__':
-  opts, args = getopt.getopt(sys.argv[1:], "", ["searchTerm=","searchTimeout=","limit=","server="])
-  searchTerm = None
-  searchTimeout = 20
-  limit = 2500
-  server = '192.87.127.133:5986'
+  url = "http://localhost:%s/documents/_external/index?searchTerm=%s&searchTimeout=%d&limit=%d" % (port, urllib.quote(searchTerm), searchTimeout, limit)
+  startTime = time.time()
+  results = urllib.urlopen(url).read()
+  endTime = time.time()
+  
+  response['time'] = endTime - startTime
+  if results == "<LimitExceeded/>" or results == "<TimedOut/>" or results == "<QueryParseError/>":
+    response['error'] = results
+  else:
+    response['results'] = list(parseResults(minidom.parseString(results)))
 
-  for opt, arg in opts:
-    if opt == "--searchTerm":
-      searchTerm = arg
-    elif opt == "--searchTimeout":
-      searchTimeout = float(arg)
-    elif opt == "--limit":
-      limit = int(arg)
-    elif opt == "--server":
-      server = arg
+  return response
+    
+import sys
+import simplejson as json
 
-  if searchTerm:
-    print "Searching for %s" % searchTerm
-    print search(searchTerm, searchTimeout, limit, server)
+def requests():
+  line = sys.stdin.readline()
+  while line:
+    yield json.loads(line)
+    line = sys.stdin.readline()
+
+def main():
+  for request in requests():
+    try: 
+      query = request['query']
+      response = {'code':200, 'json':search(**query)}
+    except Exception, e:
+      response = {'code':200, 'body':('Error: ' + str(e)), 'headers':{'Content-type':'text/plain'}} # Internal server error
+
+    sys.stdout.write("%s\n" % json.dumps(response))
+    sys.stdout.flush()
+
+if __name__ == "__main__":
+    main()
