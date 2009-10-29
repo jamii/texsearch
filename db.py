@@ -11,8 +11,6 @@ conf = open("./db.ini")
 port = re.compile(r"port *= *(\d+)").search(conf.read()).group(1)
 conf.close()
 
-print 'couchdb is at http://localhost:%s/' % port
-
 couchdb_server = couchdb.client.Server('http://localhost:%s/' % port)
 
 def confirm(prompt):

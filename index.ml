@@ -26,7 +26,9 @@ and request =
     ; ?doi : string option 
     ; ?journalID : journalID option
     ; ?publishedAfter : publicationYear option
-    ; ?publishedBefore : publicationYear option > >
+    ; ?publishedBefore : publicationYear option
+    ; ?cutoff : string option
+    ; ?precision : string = "0.7" > >
 
 and update =
   < id : doi
@@ -174,15 +176,12 @@ let with_timeout tsecs f =
 
 (* Queries *)
 
-(* The choice of cutoff is completely arbitrary *)
-let cutoff_length query = 1 + (min 5 (Query.max_length query / 3))
-
-let run_query index query filter limit =
+let run_query index query cutoff filter limit =
   let eqns = 
     Util.list_of_stream 
     (Index_tree.run_query 
       (fun eqn_node -> Query.query_dist query eqn_node.latex) 
-      (cutoff_length query) 
+      (1+cutoff)
       index.index_tree) in
   (* Collate eqns by doi *)
   let doi_map =
@@ -215,13 +214,17 @@ let handle_query index str =
     let preprocessorTimeout = args#preprocessorTimeout in
     let limit = int_of_string args#limit in
     let query = Query.of_string (preprocess preprocessorTimeout) args#searchTerm in
+    let cutoff =
+      match args#cutoff with
+        | None -> int_of_float ((1.0 -. (float_of_string args#precision)) *. (float_of_int (Query.max_length query)))
+        | Some cutoff -> int_of_string cutoff in
     let filter doi = 
       let (journalID, publicationYear, _) = Doi_map.find doi index.metadata in
           ((args#journalID = None) || (args#journalID = Some journalID))
       &&  ((args#doi = None) || (args#doi = Some (decode_doi doi)))
       &&  ((args#publishedBefore = None) || ((args#publishedBefore >= publicationYear) && (publicationYear != None)))
       &&  ((args#publishedAfter  = None) || ((args#publishedAfter  <= publicationYear) && (publicationYear != None))) in
-    xml_response (with_timeout searchTimeout (fun () -> run_query index query filter limit))
+    xml_response (with_timeout searchTimeout (fun () -> run_query index query cutoff filter limit))
   with
     | Json_type.Json_error _ | Failure _ -> xml_response (xml_error "ArgParseError")
     | Query.Parse_error -> xml_response (xml_error "QueryParseError")
