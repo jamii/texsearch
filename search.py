@@ -13,10 +13,10 @@ def parseResults(results):
     eqns = [(eqn.attributes.get('id').value, eqn.attributes.get('distance').value) for eqn in result.getElementsByTagName("equation")]
     yield (doi, [(eqnID, distance, source[eqnID]) for (eqnID, distance) in eqns])
 
-def search(searchTerm, searchTimeout=20.0, limit=2500):
+def search(searchTerm, searchTimeout="20.0", limit="2500", precision="0.7"):
   response = {}
 
-  url = "http://localhost:%s/documents/_external/index?searchTerm=%s&searchTimeout=%d&limit=%d" % (port, urllib.quote(searchTerm), searchTimeout, limit)
+  url = "http://localhost:%s/documents/_external/index?searchTerm=%s&searchTimeout=%s&limit=%s&precision=%s" % (port, urllib.quote(searchTerm), searchTimeout, limit, precision)
   startTime = time.time()
   results = urllib.urlopen(url).read()
   endTime = time.time()
