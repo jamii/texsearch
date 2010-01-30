@@ -6,7 +6,7 @@ let filter_map f ls =
   List.map 
     (fun l -> match l with Some a -> a) 
     ((List.filter 
-      (fun l -> l != None) 
+      (fun l -> l <> None) 
       (List.map f ls)))
 
 (* Fairly hackish method of sucking out stream elements *)

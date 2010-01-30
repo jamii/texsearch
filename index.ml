@@ -222,8 +222,8 @@ let handle_query index str =
       let (journalID, publicationYear, _) = Doi_map.find doi index.metadata in
           ((args#journalID = None) || (args#journalID = Some journalID))
       &&  ((args#doi = None) || (args#doi = Some (decode_doi doi)))
-      &&  ((args#publishedBefore = None) || ((args#publishedBefore >= publicationYear) && (publicationYear != None)))
-      &&  ((args#publishedAfter  = None) || ((args#publishedAfter  <= publicationYear) && (publicationYear != None))) in
+      &&  ((args#publishedBefore = None) || ((args#publishedBefore >= publicationYear) && (publicationYear <> None)))
+      &&  ((args#publishedAfter  = None) || ((args#publishedAfter  <= publicationYear) && (publicationYear <> None))) in
     xml_response (with_timeout searchTimeout (fun () -> run_query index query cutoff filter limit))
   with
     | Json_type.Json_error _ | Failure _ -> xml_response (xml_error "ArgParseError")
