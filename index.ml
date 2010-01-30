@@ -282,7 +282,7 @@ let run_update index update =
     let index = 
       if not (Doi_map.mem update#id index.metadata) then index else
       let index_tree = 
-        match Index_tree.filter (fun eqn_node -> eqn_node.doi != update#id) index.index_tree with
+        match Index_tree.filter (fun eqn_node -> eqn_node.doi <> update#id) index.index_tree with
           | Some index_tree -> index_tree
           (* We somehow managed to delete the dummy node at the base of the tree *)
           | None -> raise (FailedUpdate (update#key, update#id)) in
