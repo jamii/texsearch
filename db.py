@@ -195,6 +195,7 @@ if __name__ == '__main__':
            print exc
            errors.append((file,exc))
       elif opt == "--del":
+        for file in walk(arg):
           try:            
             if file.lower().endswith(".xml"):
               delFile(file,"xml")
