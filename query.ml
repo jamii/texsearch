@@ -13,51 +13,60 @@ let rec max_length query =
     | And (query1,query2) -> max (max_length query1) (max_length query2)
     | Or (query1,query2) -> max (max_length query1) (max_length query2)
 
-open Str
-open Genlex
+let is_blank_string str = 
+  let blank = ref true in
+  String.iter
+    (fun char -> 
+      if char <> ' ' 
+      then blank := false
+      else ())
+    str;
+  !blank
 
-(* Quick and dirty lexer, tokens are: "latexstring" ) ( AND OR *)
-let tokens = regexp "\"[^\"]*\"\|(\|)\|AND\|OR"
-let lex str =
-  List.filter
-    (fun token -> match token with
-      | Text _ -> false
-      | Delim _ -> true)
-  (full_split tokens str)
+let is_quoted_string str =
+  (String.get str 0 == '"') && (String.get str (String.length str - 1) == '"')
+
+open Str
+
+(* Quick and dirty lexer, delimiters are: "latexstring" ) ( AND OR *)
+let token_spec = regexp "\"[^\"]*\"\|(\|)\|AND\|OR"
+let lex str = 
+  let tokens = full_split token_spec str in
+  let tokens = 
+    List.filter 
+      (function
+        | Text text when is_blank_string text -> false
+        | _ -> true)
+      tokens in
+  Stream.of_list tokens
+
+(* A simple recursive descent parser *)
+let parse_query preprocesser tokens =
+  let rec parse_atom = 
+    parser
+      | [< 'Delim "("; q=parse_expr; 'Delim ")" >] -> q
+      | [< 'Delim delim when is_quoted_string delim >] -> 
+          let text = String.sub delim 1 (String.length delim - 2) in
+          let (lines, plain) = preprocesser text in
+          Latex (lines, plain)
+
+  and parse_expr = 
+    parser
+      | [< q1=parse_atom; stream >] ->
+          (parser
+            | [< 'Delim "AND"; q2=parse_expr >] -> And (q1, q2)
+            | [< 'Delim "OR"; q2=parse_expr >] -> Or (q1, q2)
+            | [< >] -> q1)
+          stream
+
+  and parse_query =
+    parser
+      | [< q=parse_expr; stream >] ->
+          Stream.empty stream; q in
+
+  parse_query tokens
 
 exception Parse_error
-
-(* A simple recursive descent parser. Not the prettiest but yacc would be overkill *)
-(* Might be worth using the campl4 parse extension *)
-let parse_query preprocesser tokens =
-  let rec parse_atom tokens =
-    match tokens with
-      | Delim "(" :: rest ->
-          let (query,rest) = parse_atom rest in
-          (match rest with
-            | Delim ")" :: rest -> parse_compound query rest
-            | _ -> raise Parse_error)
-      | Delim "AND" :: rest | Delim "OR" :: rest | Delim ")" :: rest -> raise Parse_error
-      | Delim latex_string :: rest ->
-          let (lines,plain) = preprocesser (String.sub latex_string 1 (String.length latex_string - 2)) in
-          parse_compound (Latex (lines,plain)) rest
-      | _ -> raise Parse_error
-
-  and parse_compound query1 tokens =
-    match tokens with
-      | Delim "AND" :: rest ->
-          let (query2,rest) = parse_atom rest in
-          (And (query1,query2), rest)
-      | Delim "OR" :: rest ->
-          let (query2,rest) = parse_atom rest in
-          (Or (query1,query2), rest)
-      | Delim "(" :: rest -> raise Parse_error
-      | Delim ")" :: rest -> (query1, tokens)
-      | [] -> (query1,[])
-      | _ -> raise Parse_error in
-
- match parse_atom tokens with
-  | (query,_) -> query
 
 let of_string preprocesser str = 
   try
@@ -73,7 +82,6 @@ let rec to_string query =
 
 (* Extending the edit distance on latex strings to edit distance on compound queries *)
 (* With the Edit.left_edit_distance as a quasi-metric this is a valid query for the bktree index *)
-
 let rec query_dist query latex =
   match query with
     | Latex (lines,_) -> Util.minimum (List.map (fun line -> Edit.left_edit_distance line latex) lines)
