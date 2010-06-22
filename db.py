@@ -196,7 +196,7 @@ import os, os.path, getopt
 
 if __name__ == '__main__':
   try:
-    opts, args = getopt.getopt(sys.argv[1:], "", ["init", "reprocess", "add=", "del="])
+    opts, args = getopt.getopt(sys.argv[1:], "", ["init", "reprocess", "add=", "del=", "convert"])
     errors = []
 
     for opt, arg in opts:
@@ -228,6 +228,8 @@ if __name__ == '__main__':
           except Exception, exc:
             print exc
             errors.append((file,exc))
+      elif opt == "--convert":
+        convert_journalID_containerID()
     if errors:
       print "Errors occurred whilst processing the following files:"
       for (fi,exc) in errors:
