@@ -64,23 +64,32 @@ def parseEquation(eqn):
 def filterNone(xs):
   return [x for x in xs if x is not None]
 
-def parseArticle(article):
-  doi = article.getElementsByTagName("ArticleDOI")[0].childNodes[0].wholeText
-  print ("Parsing article %s" % doi)
-    
-  equations = filterNone([parseEquation(eqn) for eqn in article.getElementsByTagName("Equation") + article.getElementsByTagName("InlineEquation")])
+def parseEquations(item):
+  equations = filterNone([parseEquation(eqn) for eqn in item.getElementsByTagName("Equation") + item.getElementsByTagName("InlineEquation")])
   # Eliminate duplicate equations (key is latex)
   equations = dict(equations).items()
 
   source = dict([(eqnID, latex) for (latex, eqnID) in equations])
   content = dict(filterNone([preprocess(eqnID, latex) for (latex, eqnID) in equations]))
 
-  return {'_id': encodeDoi(doi), 'source': source, 'content': content}
+  return (source, content)
+  
+def parseArticle(article):
+  doi = article.getElementsByTagName("ArticleDOI")[0].childNodes[0].wholeText
+  print ("Parsing article %s" % doi)
+  journalID = xml.getElementsByTagName("JournalID")[0].childNodes[0].wholeText
+  (source, content) = parseEquations(article)
+  return {'_id': encodeDoi(doi), 'source': source, 'content': content, 'format': 'Article', 'containerID': journalID}
+
+def parseChapter(xml, chapter):
+  doi = chapter.getElementsByTagName("ChapterDOI")[0].childNodes[0].wholeText
+  print ("Parsing chapter %s" % doi)
+  bookDOI = xml.getElementsByTagName("BookDOI")[0].childNodes[0].wholeText
+  (source, content) = parseEquations(chapter)
+  return {'_id': encodeDoi(doi), 'source': source, 'content': content, 'format':'Chapter', 'containerID': bookDOI}
 
 def parseFile(fileName):
   xml = minidom.parse(fileName)
-
-  journalID = xml.getElementsByTagName("JournalID")[0].childNodes[0].wholeText
 
   publicationDate = xml.getElementsByTagName("PrintDate") or xml.getElementsByTagName("CoverDate") or xml.getElementsByTagName("OnlineDate")
   if publicationDate:
@@ -89,10 +98,11 @@ def parseFile(fileName):
     print "Note: no publication year"
     publicationYear = None
 
-  docs = [parseArticle(article) for article in xml.getElementsByTagName("Article")]
+  articles = [parseArticle(article) for article in xml.getElementsByTagName("Article")]
+  chapters = [parseChapter(xml, chapter) for chapter in xml.getElementsByTagName("Chapter")]
+  docs = articles + chapters
 
   for doc in docs:
-    doc['journalID'] = journalID
     doc['publicationYear'] = publicationYear
 
   return docs
@@ -146,6 +156,18 @@ def reprocess():
     print "Reprocessing %s" % decodeDoi(doi)
     doc = db[doi]
     doc['content'] = dict(filterNone([(preprocess(eqnID, latex)) for (eqnID, latex) in doc['source'].items()]))
+    db[doi] = doc
+
+def convert_journalID_containerID():
+  db = couchdb_server['documents']
+
+  print "Converting"    
+  for doi in db:
+    print "Converting %s" % decodeDoi(doi)
+    doc = db[doi]
+    if 'journalID' in doc:
+      doc['containerID'] = doc['journalID']
+      del doc['journalID']
     db[doi] = doc
 
 # Repair this server by copying content from targetServer

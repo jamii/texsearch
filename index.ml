@@ -8,11 +8,13 @@ Mostly I/O and error handling. See the last section for the commands supported.
 type json doi = string
 
 and eqnID = string
-and journalID = string
+and containerID = string
 and publicationYear = string
+and format = string
 
 and document =
-  < journalID : journalID
+  < ?containerID : containerID option
+  ; ?format : format = "Article" (* Originally only articles were supported *)
   ; publicationYear : publicationYear option
   ; content : (string * Json_type.t) assoc (* eqnID*Latex.t *)
   ; source : (string * string) assoc > (* eqnID*string *)
@@ -24,7 +26,7 @@ and request =
     ; ?preprocessorTimeout : string = "5.0"
     ; ?limit : string = "1000"
     ; ?doi : string option 
-    ; ?journalID : journalID option
+    ; ?containerID : containerID option
     ; ?publishedAfter : publicationYear option
     ; ?publishedBefore : publicationYear option
     ; ?cutoff : string option
@@ -47,6 +49,19 @@ type eqn_node =
   { doi : doi
   ; eqnID : eqnID
   ; latex : Latex.t }
+
+(* json-static converts json into objects which cannot be stored using Marshal, so store metadata record instead *)
+type metadata = 
+  { containerID : containerID option
+  ; format : format
+  ; publicationYear : publicationYear option
+  ; no_eqns : int }
+
+let metadata_of_doc doc =
+  { containerID = doc#containerID
+  ; format = doc#format
+  ; publicationYear = doc#publicationYear
+  ; no_eqns = List.length doc#content }
 
 (* Assorted imports and utililty functions *)
 
@@ -88,7 +103,7 @@ module Index_tree = Bktree.Make (Eqn_node_metric)
 type index =
   { last_update : int (* Key of the last update received from couchdb *)
   ; index_tree : Index_tree.t
-  ; metadata : (journalID * publicationYear option * int) Doi_map.t }
+  ; metadata : metadata Doi_map.t }
 
 (* Persisting *)
 
@@ -141,8 +156,8 @@ let preprocess timeout latex_string =
 let xml_of_results results query_string =
   let xml_of_eqn (eqnID,weight) =
     Xml.Element ("equation", [("distance",string_of_int weight);("id",eqnID)], []) in
-  let xml_of_result (doi,eqns) =
-    Xml.Element ("result", 
+  let xml_of_result (doi,metadata,eqns) =
+    Xml.Element (metadata.format, 
       [("doi", decode_doi doi);("count", string_of_int (List.length eqns))], 
       (List.map xml_of_eqn eqns)) in
   let xml_of_query_string =
@@ -191,8 +206,7 @@ let run_query index query cutoff filter limit =
         Doi_map.update key (fun values -> value::values) [value] doi_map)
       Doi_map.empty      
       eqns in
-  (* Remove duplicate eqnID resulting from matches on multiple lines *)
-  (* TODO *)
+  (* TODO Remove duplicate eqnID resulting from matches on multiple lines *)
   (* Remove the dummy node *)
   let doi_map = Doi_map.remove "" doi_map in
   if Doi_map.count doi_map > limit 
@@ -200,11 +214,14 @@ let run_query index query cutoff filter limit =
     xml_error "LimitExceeded"
   else
     let results = Doi_map.list_of doi_map in
-    let results = List.filter (fun (doi,_) -> filter doi) results in
+    (* Insert metadata *)
+    let results = List.map (fun (doi,eqns) -> (doi, Doi_map.find doi index.metadata, eqns)) results in
+    (* Apply filter *)
+    let results = List.filter (fun (doi,metadata,_) -> filter doi metadata) results in
     (* Sort each set of equations by weight *)
-    let results = List.map (fun (doi,eqns) -> (doi,List.fast_sort (fun a b -> compare (snd a) (snd b)) eqns)) results in
+    let results = List.map (fun (doi,metadata,eqns) -> (doi,metadata,List.fast_sort (fun a b -> compare (snd a) (snd b)) eqns)) results in
     (* Sort doi's by lowest weighted equation *)
-    let results = List.fast_sort (fun (_,eqnsA) (_,eqnsB) -> compare (snd (List.hd eqnsA)) (snd (List.hd eqnsB))) results in
+    let results = List.fast_sort (fun (_,_,eqnsA) (_,_,eqnsB) -> compare (snd (List.hd eqnsA)) (snd (List.hd eqnsB))) results in
     xml_of_results results (Query.to_string query)
 
 let handle_query index str =
@@ -218,12 +235,11 @@ let handle_query index str =
       match args#cutoff with
         | None -> int_of_float ((1.0 -. (float_of_string args#precision)) *. (float_of_int (Query.max_length query)))
         | Some cutoff -> int_of_string cutoff in
-    let filter doi = 
-      let (journalID, publicationYear, _) = Doi_map.find doi index.metadata in
-          ((args#journalID = None) || (args#journalID = Some journalID))
+    let filter doi metadata = 
+          ((args#containerID = None) || (args#containerID = metadata.containerID))
       &&  ((args#doi = None) || (args#doi = Some (decode_doi doi)))
-      &&  ((args#publishedBefore = None) || ((args#publishedBefore >= publicationYear) && (publicationYear <> None)))
-      &&  ((args#publishedAfter  = None) || ((args#publishedAfter  <= publicationYear) && (publicationYear <> None))) in
+      &&  ((args#publishedBefore = None) || ((args#publishedBefore >= metadata.publicationYear) && (metadata.publicationYear <> None)))
+      &&  ((args#publishedAfter  = None) || ((args#publishedAfter  <= metadata.publicationYear) && (metadata.publicationYear <> None))) in
     xml_response (with_timeout searchTimeout (fun () -> run_query index query cutoff filter limit))
   with
     | Json_type.Json_error _ | Failure _ -> xml_response (xml_error "ArgParseError")
@@ -303,7 +319,7 @@ let run_update index update =
                   lines)
               index.index_tree
               doc#content in
-          let metadata = Doi_map.add update#id (doc#journalID, doc#publicationYear, List.length doc#content) index.metadata in
+          let metadata = Doi_map.add update#id (metadata_of_doc doc) index.metadata in
           {last_update=update#key; index_tree=index_tree; metadata=metadata}
   with _ ->
     raise (FailedUpdate (update#key, update#id))
@@ -334,10 +350,14 @@ let list_all () =
   flush_line "Loading index";
   let index = load_index () in
   Doi_map.iter
-    (fun doi (journalID, publicationYear, no_eqns) -> 
-      flush_line ((decode_doi doi) ^ " journalID=" ^ journalID ^ " no_equations=" ^ (string_of_int no_eqns)))
+    (fun doi metadata -> 
+      match metadata.containerID with
+      | None -> 
+          flush_line ((decode_doi doi) ^ "no_equations=" ^ (string_of_int metadata.no_eqns))
+      | Some containerID -> 
+          flush_line ((decode_doi doi) ^ " containerID=" ^ containerID ^ " no_equations=" ^ (string_of_int metadata.no_eqns)))
     index.metadata;
-  let no_eqns = Doi_map.fold (fun _ (_,_,no_eqns) total -> no_eqns+total) index.metadata 0 in
+  let no_eqns = Doi_map.fold (fun _ metadata total -> metadata.no_eqns+total) index.metadata 0 in
   flush_line ("Total number of equations: " ^ (string_of_int no_eqns))
 
 let list_one doi =
@@ -347,8 +367,12 @@ let list_one doi =
   let index = load_index () in
   flush_line ("Searching for " ^ doi);
   try
-    let (journalID, publicationYear, no_eqns) = Doi_map.find (encode_doi doi) index.metadata in
-    flush_line ((decode_doi doi) ^ " journalID=" ^ journalID ^ " no_equations=" ^ (string_of_int no_eqns))
+    let metadata = Doi_map.find (encode_doi doi) index.metadata in
+    (match metadata.containerID with
+    | None -> 
+        flush_line ((decode_doi doi) ^ "no_equations=" ^ (string_of_int metadata.no_eqns))
+    | Some containerID -> 
+        flush_line ((decode_doi doi) ^ " containerID=" ^ containerID ^ " no_equations=" ^ (string_of_int metadata.no_eqns)))
   with Not_found ->
     flush_line "DOI not indexed"
 
