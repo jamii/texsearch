@@ -138,6 +138,8 @@ def addFile(fileName, type):
       print "Overwriting existing entry"
       doc['_rev'] = oldDoc['_rev']
       db[doc['_id']] = doc
+      
+  print
 
 def delFile(fileName, type):
   db = couchdb_server['documents']
