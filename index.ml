@@ -69,8 +69,8 @@ module Http = Http_client.Convenience
 let encode url = Netencoding.Url.encode ~plus:false url
 
 (* couchdb does not allow '/' in keys *)
-let encode_doi doi = Str.global_replace (Str.regexp "/") "_" doi
-let decode_doi doi = Str.global_replace (Str.regexp "_") "/" doi
+let encode_doi doi = Str.replace_first (Str.regexp "/") "_" doi
+let decode_doi doi = Str.replace_first (Str.regexp "_") "/" doi
 
 let flush_line str = print_string str; print_string "\n"; flush stdout
 
