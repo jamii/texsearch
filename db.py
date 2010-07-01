@@ -81,12 +81,20 @@ def parseArticle(article):
   (source, content) = parseEquations(article)
   return {'_id': encodeDoi(doi), 'source': source, 'content': content, 'format': 'Article', 'containerID': journalID}
 
-def parseChapter(xml, chapter):
+def parseChapter(chapter):
   doi = chapter.getElementsByTagName("ChapterDOI")[0].childNodes[0].wholeText
   print ("Parsing chapter %s" % doi)
-  bookDOI = xml.getElementsByTagName("BookDOI")[0].childNodes[0].wholeText
   (source, content) = parseEquations(chapter)
-  return {'_id': encodeDoi(doi), 'source': source, 'content': content, 'format':'Chapter', 'containerID': bookDOI}
+  return {'_id': encodeDoi(doi), 'source': source, 'content': content, 'format':'Chapter'}
+
+def parseBook(book):
+  bookDOI = book.getElementsByTagName("BookDOI")[0].childNodes[0].wholeText
+  chapters = []
+  for chapter in book.getElementsByTagName("Chapter"):
+    chapter = parseChapter(chapter)
+    chapter['containerID'] = bookDOI
+    chapters.append(chapter)
+  return chapters
 
 def parseFile(fileName):
   xml = minidom.parse(fileName)
@@ -99,7 +107,9 @@ def parseFile(fileName):
     publicationYear = None
 
   articles = [parseArticle(article) for article in xml.getElementsByTagName("Article")]
-  chapters = [parseChapter(xml, chapter) for chapter in xml.getElementsByTagName("Chapter")]
+  chapters = []
+  for book in xml.getElementsByTagName("Book"):
+    chapters.extend(parseBook(book))
   docs = articles + chapters
 
   for doc in docs:
