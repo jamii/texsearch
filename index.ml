@@ -331,6 +331,7 @@ let rec run_update_batches index =
   if List.length update_batch < batch_size then index else run_update_batches index
 
 let run_updates () = 
+  Pid.lock ();
   flush_line ("couchdb is at " ^ couchdb_url);
   flush_line "Loading index";
   let index = load_index () in
