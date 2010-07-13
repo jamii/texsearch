@@ -77,9 +77,17 @@ def parseEquations(item):
 def parseArticle(article):
   doi = article.getElementsByTagName("ArticleDOI")[0].childNodes[0].wholeText
   print ("Parsing article %s" % doi)
-  journalID = xml.getElementsByTagName("JournalID")[0].childNodes[0].wholeText
+
+  publicationDate = article.getElementsByTagName("PrintDate") or article.getElementsByTagName("CoverDate") or article.getElementsByTagName("OnlineDate")
+  if publicationDate:
+    publicationYear = publicationDate[0].getElementsByTagName("Year")[0].childNodes[0].wholeText
+  else:
+    print "Note: no publication year"
+    publicationYear = None
+
+  journalID = article.getElementsByTagName("JournalID")[0].childNodes[0].wholeText
   (source, content) = parseEquations(article)
-  return {'_id': encodeDoi(doi), 'source': source, 'content': content, 'format': 'Article', 'containerID': journalID}
+  return {'_id': encodeDoi(doi), 'source': source, 'content': content, 'format': 'Article', 'containerID': journalID, 'publicationYear': publicationYear}
 
 def parseChapter(chapter):
   doi = chapter.getElementsByTagName("ChapterDOI")[0].childNodes[0].wholeText
@@ -89,31 +97,30 @@ def parseChapter(chapter):
 
 def parseBook(book):
   bookDOI = book.getElementsByTagName("BookDOI")[0].childNodes[0].wholeText
+
+  publicationDate = article.getElementsByTagName("BookCopyright")
+  if publicationDate:
+    publicationYear = publicationDate[0].getElementsByTagName("CopyrightYear")[0].childNodes[0].wholeText
+  else:
+    print "Note: no publication year"
+    publicationYear = None
+
   chapters = []
   for chapter in book.getElementsByTagName("Chapter"):
     chapter = parseChapter(chapter)
     chapter['containerID'] = bookDOI
+    chapter['publicationYear'] = publicationYear
     chapters.append(chapter)
   return chapters
 
 def parseFile(fileName):
   xml = minidom.parse(fileName)
 
-  publicationDate = xml.getElementsByTagName("PrintDate") or xml.getElementsByTagName("CoverDate") or xml.getElementsByTagName("OnlineDate")
-  if publicationDate:
-    publicationYear = publicationDate[0].getElementsByTagName("Year")[0].childNodes[0].wholeText
-  else:
-    print "Note: no publication year"
-    publicationYear = None
-
   articles = [parseArticle(article) for article in xml.getElementsByTagName("Article")]
   chapters = []
   for book in xml.getElementsByTagName("Book"):
     chapters.extend(parseBook(book))
   docs = articles + chapters
-
-  for doc in docs:
-    doc['publicationYear'] = publicationYear
 
   return docs
 

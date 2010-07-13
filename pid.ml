@@ -21,7 +21,7 @@ let lock () =
     close_out pid_file
   with 
   | Exit ->
-    raise Exit
+      raise Exit
   | exc ->
-    flush_line "Error checking pid in run/update.pid";
-    raise exc
+      flush_line "Error checking pid in run/update.pid";
+      raise exc
