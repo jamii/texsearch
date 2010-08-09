@@ -177,6 +177,7 @@ def reprocess():
     doc['content'] = dict(filterNone([(preprocess(eqnID, latex)) for (eqnID, latex) in doc['source'].items()]))
     db[doi] = doc
 
+# Rename journalID field to containerID
 def convert_journalID_containerID():
   db = couchdb_server['documents']
 
@@ -188,6 +189,30 @@ def convert_journalID_containerID():
       doc['containerID'] = doc['journalID']
       del doc['journalID']
     db[doi] = doc
+
+def ml_year(doi):
+  response = urllib.urlopen("http://latexalpha.mpstechnologies.com/year.do?doi=" + doi).read()
+  xml = minidom.parseString(response)
+  return xml.childNodes[0].getAttribute('year')[0:4]
+
+# Check dates against ML
+def check_dates():
+  db = couchdb_server['documents']
+
+  print "Checking dates"
+  for doi in db:
+    doc = db[doi]
+    actual = doc['publicationYear']
+    expected = ml_year(decodeDoi(doi))
+    if expected != "":
+      if expected != actual:
+        print ("Doi: %s Expected: %s Actual: %s" % (doi, expected, actual))
+        doc['publicationYear'] = expected
+        db[doi] = doc
+      else:
+        print ("Doi: %s ok" % doi)
+    elif doc.get('format', 'article').lower() == 'article':
+      print ("ML year not defined for article: %s" % doi)
 
 # Repair this server by copying content from targetServer
 def repair(targetServer):
@@ -215,14 +240,12 @@ import os, os.path, getopt
 
 if __name__ == '__main__':
   try:
-    opts, args = getopt.getopt(sys.argv[1:], "", ["init", "reprocess", "add=", "del=", "convert"])
+    opts, args = getopt.getopt(sys.argv[1:], "", ["init", "add=", "del=", "convert", "reprocess", "check_dates"])
     errors = []
 
     for opt, arg in opts:
       if opt == "--init":
         initDB()
-      elif opt == "--reprocess":
-        reprocess()
       elif opt == "--add":
         for file in walk(arg):
           try:
@@ -247,6 +270,10 @@ if __name__ == '__main__':
           except Exception, exc:
             print exc
             errors.append((file,exc))
+      elif opt == "--reprocess":
+        reprocess()
+      elif opt == "--check_dates":
+        check_dates()
       elif opt == "--convert":
         convert_journalID_containerID()
     if errors:
