@@ -201,18 +201,24 @@ def check_dates():
 
   print "Checking dates"
   for doi in db:
-    doc = db[doi]
-    actual = doc['publicationYear']
-    expected = ml_year(decodeDoi(doi))
-    if expected != "":
-      if expected != actual:
-        print ("Doi: %s Expected: %s Actual: %s" % (doi, expected, actual))
-        doc['publicationYear'] = expected
-        db[doi] = doc
-      else:
-        print ("Doi: %s ok" % doi)
-    elif doc.get('format', 'article').lower() == 'article':
-      print ("ML year not defined for article: %s" % doi)
+    try:
+      doc = db[doi]
+      actual = doc['publicationYear']
+      expected = ml_year(decodeDoi(doi))
+      if expected != "":
+        if expected != actual:
+          print ("Doi: %s Expected: %s Actual: %s" % (doi, expected, actual))
+          doc['publicationYear'] = expected
+          db[doi] = doc
+        else:
+          print ("Doi: %s ok" % doi)
+      elif doc.get('format', 'article').lower() == 'article':
+        print ("ML year not defined for article: %s" % doi)
+    except KeyboardInterrupt, e:
+      raise e
+    except Exception, e:
+      print ("Failed on doi: %s" % doi)
+      print e
 
 # Repair this server by copying content from targetServer
 def repair(targetServer):
