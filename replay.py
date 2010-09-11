@@ -4,16 +4,21 @@ import re
 import search
 import urllib
 
-search_term = re.compile(r'searchTerm=([^&]*)&')
+search_term_re = re.compile(r'searchTerm=([^&]*)&')
 
-def replay_log_file(filename): 
+def replay_log_file(filename):
+    search_terms = set()
+
     for log in open(filename):
-        match = search_term.search(log)
+        match = search_term_re.search(log)
         if match:
-            st = urllib.unquote(match.group(1))
-            result = search.search(st, searchTimeout="55.0", limit="10000")
-            yield (result['time'], st)
+            search_term = urllib.unquote(match.group(1))
+            search_terms.add(search_term)
+
+    for search_term in search_terms:
+        result = search.search(search_term, searchTimeout="55000.0", limit="10000")
+        yield (result['time'], search_term)
 
 if __name__ == '__main__':
-    for time, st in replay_log_file(sys.argv[1]):
+    for time, search_term in replay_log_file(sys.argv[1]):
         print time, st
