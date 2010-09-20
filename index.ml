@@ -332,6 +332,7 @@ let rec run_update_batches index =
 
 let run_updates () = 
   Pid.lock ();
+  Util.expect_garbage ();
   flush_line ("couchdb is at " ^ couchdb_url);
   flush_line "Loading index";
   let index = load_index () in

@@ -25,3 +25,14 @@ struct
   let list_of map = fold (fun k v rest -> (k,v) :: rest) map []
 end
 
+(* Tune the gc for lots of garbage *)
+open Gc
+let expect_garbage () =
+  let m = 1024 * 1024 in
+  Gc.set 
+    {Gc.get () with
+      minor_heap_size = 256 * m;
+      major_heap_increment = 64 * m;
+      space_overhead = 200
+    }
+
