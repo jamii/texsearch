@@ -90,7 +90,7 @@ struct
   let to_bucket pivot d = if d <= pivot then 0 else 1
   let from_bucket pivot d = if d == 0 then pivot else max_int
 
-  let rec add node bktree =
+  let rec add_raw node bktree =
     let d = dist node bktree.root_node in
     let pivot = 
       match bktree.pivot with
@@ -101,13 +101,31 @@ struct
     let children = IntMap.update bucket (add node) (empty_branch node) bktree.children in
     {bktree with pivot=Some pivot; sizes=sizes; children=children}
 
-  let of_list (node::nodes) =
-    List.fold_left (fun bktree node -> add node bktree) (empty_branch node) nodes
+  and add node bktree =
+    balance (add_raw node bktree)
 
-  let rec to_list bktree =
-    bktree.root_node :: IntMap.fold (fun _ -> List.append) (IntMap.map to_list bktree.children) []
+  and of_list (root_node::nodes) =
+    let dists = List.map (fun node -> dist node root_node) nodes in
+    let n = List.length nodes in
+    let pivot = List.nth dists ((n-1)/2) in
+    let bktree = {empty_branch root_node with pivot=Some pivot} in
+    List.fold_left (fun bktree node -> add_raw node bktree) bktree nodes
 
-  let descendants bktree = List.tl (to_list bktree)
+  and to_list bktree =
+    bktree.root_node :: descendants bktree
+
+  and descendants bktree = IntMap.fold (fun _ -> List.append) (IntMap.map to_list bktree.children) []
+
+  and balance bktree =
+    let left = IntMap.find 0 bktree.sizes in
+    let right = IntMap.find 1 bktree.sizes in
+    if left < right
+    then 
+      begin
+	Util.flush_line ("Balancing " ^ (string_of_int left) ^ " " ^ (string_of_int right));
+	of_list (to_list bktree)
+      end
+    else bktree
 
   (* This is an expensive function. Since there is no way to merge bktree's, everything below a deleted node must be rebuilt *)
   (* Since we have no way to represent an empty tree, this may have to return None *)
