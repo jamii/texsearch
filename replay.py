@@ -21,4 +21,4 @@ def replay_log_file(filename):
 
 if __name__ == '__main__':
     for time, search_term in replay_log_file(sys.argv[1]):
-        print time, st
+        print time, search_term
