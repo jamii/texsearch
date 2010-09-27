@@ -83,7 +83,7 @@ struct
       |	None -> d
       |	Some pivot -> pivot in
     let bucket = to_bucket pivot d in
-    let sizes = IntMap.update bucket ((+) 1) 0 bktree.sizes in
+    let sizes = IntMap.update bucket ((+) 1) 1 bktree.sizes in
     let children = IntMap.update bucket (add node) (empty_branch node) bktree.children in
     {bktree with pivot=Some pivot; sizes=sizes; children=children}
 
@@ -91,7 +91,7 @@ struct
     balance (add_raw node bktree)
 
   and of_list (root_node::nodes) =
-    let dists = List.map (fun node -> dist node root_node) nodes in
+    let dists = List.fast_sort compare (List.map (fun node -> dist node root_node) nodes) in
     let n = List.length nodes in
     let pivot = List.nth dists ((n-1)/2) in
     let bktree = {empty_branch root_node with pivot=Some pivot} in
@@ -103,13 +103,16 @@ struct
   and descendants bktree = IntMap.fold (fun _ -> List.append) (IntMap.map to_list bktree.children) []
 
   and balance bktree =
-    let left = IntMap.find 0 bktree.sizes in
-    let right = IntMap.find 1 bktree.sizes in
+    let left = IntMap.find_with 0 0 bktree.sizes in
+    let right = IntMap.find_with 1 0 bktree.sizes in
     if left < right
     then 
       begin
-	Util.flush_line ("Balancing " ^ (string_of_int left) ^ " " ^ (string_of_int right));
-	of_list (to_list bktree)
+	let nodes = to_list (IntMap.find 1 bktree.children) in
+	let dists = List.fast_sort compare (List.map (fun node -> dist node bktree.root_node) nodes) in
+	let pivot = List.nth dists ((right - left) / 2) in
+	let bktree = {bktree with pivot = Some pivot; sizes = IntMap.remove 1 bktree.sizes; children = IntMap.remove 1 bktree.children} in
+	List.fold_left (fun bktree node -> add_raw node bktree) bktree nodes
       end
     else bktree
 
