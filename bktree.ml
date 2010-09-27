@@ -50,25 +50,11 @@ struct
 
   let dist = Quasi_metric.dist
 
-  module IntMap = 
-  struct
-    include Map.Make (struct
+  module IntMap = Util.Make_map (
+    struct
       type t = int
       let compare = compare
     end)
-
-    let update key f default map =
-      add key (try f (find key map) with Not_found -> default) map
-
-    let filter_map f map =
-      fold 
-        (fun key value map -> 
-          match (f value) with 
-            | None -> map
-            | Some value -> add key value map)
-        map
-        empty
-  end
 
   (* A bk-cover-tree *)
   (* This cannot represent an empty bktree, a fact which is convenient except when deleting nodes *) 

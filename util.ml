@@ -25,6 +25,21 @@ struct
   let count map = fold (fun _ _ n -> n+1) map 0
 
   let list_of map = fold (fun k v rest -> (k,v) :: rest) map []
+
+  let find_with key default map = 
+    try 
+      find key map
+    with Not_found ->
+      default
+
+    let filter_map f map =
+      fold 
+        (fun key value map -> 
+          match (f value) with 
+            | None -> map
+            | Some value -> add key value map)
+        map
+        empty
 end
 
 (* Tune the gc for lots of garbage *)
