@@ -74,10 +74,12 @@ struct
   (* This cannot represent an empty bktree, a fact which is convenient except when deleting nodes *) 
   type t =
     { root_node : node
+    ; sizes : int IntMap.t
     ; children : t IntMap.t }
 
   let empty_branch node = 
     { root_node = node
+    ; sizes = IntMap.empty
     ; children = IntMap.empty }
 
   let rec size bktree = 1 + (IntMap.fold (fun _ child total -> total + size child) bktree.children 0)
@@ -88,8 +90,9 @@ struct
 
   let rec add node bktree =
     let bucket = to_bucket (dist node bktree.root_node) in
+    let sizes = IntMap.update bucket ((+) 1) 0 bktree.sizes in
     let children = IntMap.update bucket (add node) (empty_branch node) bktree.children in
-    {bktree with children=children}
+    {bktree with sizes=sizes; children=children}
 
   let of_list (node::nodes) =
     List.fold_left (fun bktree node -> add node bktree) (empty_branch node) nodes
@@ -105,7 +108,8 @@ struct
     if f bktree.root_node
     then 
       (* Just filter children *)
-      Some {bktree with children = IntMap.filter_map (filter f) bktree.children}
+      let children = IntMap.filter_map (filter f) bktree.children in
+      Some {bktree with sizes=IntMap.map size children; children=children}
     else
       (* Have to rebuild everything *)
       let nodes = List.filter f (descendants bktree) in
@@ -113,7 +117,7 @@ struct
         | [] -> None
         | _  -> Some (of_list nodes)
 
-  (*
+  (* 
   the search structure tracks the progress of a search through a tree
   the search will eventually return every node st 'query node < cutoff'
 
@@ -126,7 +130,7 @@ struct
   search.results stores nodes which have been searched
   search.results.(i) contains matches with dist i from the query
 
-  the search continues until search.min_dist = cutoff at which point we know every unsearched node satisfies 'query node >= cutoff'
+  the search continues until search.min_dist = cutoff at which point we know every unsearched node satisfies 'query node >= cutoff' 
   *)
 
   type result = node * int 
