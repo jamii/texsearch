@@ -1,3 +1,5 @@
+let flush_line str = print_string str; print_string "\n"; flush stdout
+
 let minimum (l::ls) = List.fold_left min l ls
 
 let maximum (l::ls) = List.fold_left max l ls
