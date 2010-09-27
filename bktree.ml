@@ -74,25 +74,32 @@ struct
   (* This cannot represent an empty bktree, a fact which is convenient except when deleting nodes *) 
   type t =
     { root_node : node
+    ; pivot : int option
     ; sizes : int IntMap.t
     ; children : t IntMap.t }
 
   let empty_branch node = 
     { root_node = node
+    ; pivot = None
     ; sizes = IntMap.empty
     ; children = IntMap.empty }
 
   let rec size bktree = 1 + (IntMap.fold (fun _ child total -> total + size child) bktree.children 0)
 
   (* from_bucket d = max { x | to_bucket x = d } *)
-  let to_bucket d = int_of_float (log (float_of_int d))
-  let from_bucket d = int_of_float (exp (float_of_int (d+1)))
+  let to_bucket pivot d = if d <= pivot then 0 else 1
+  let from_bucket pivot d = if d == 0 then pivot else max_int
 
   let rec add node bktree =
-    let bucket = to_bucket (dist node bktree.root_node) in
+    let d = dist node bktree.root_node in
+    let pivot = 
+      match bktree.pivot with
+      |	None -> d
+      |	Some pivot -> pivot in
+    let bucket = to_bucket pivot d in
     let sizes = IntMap.update bucket ((+) 1) 0 bktree.sizes in
     let children = IntMap.update bucket (add node) (empty_branch node) bktree.children in
-    {bktree with sizes=sizes; children=children}
+    {bktree with pivot=Some pivot; sizes=sizes; children=children}
 
   let of_list (node::nodes) =
     List.fold_left (fun bktree node -> add node bktree) (empty_branch node) nodes
@@ -158,12 +165,15 @@ struct
         (* Search in bktree, put the rest back *)
         search.unsearched.(search.min_dist) <- rest;
         let d = search.query bktree.root_node in
-        if d < search.cutoff then search.results.(d) <- (bktree.root_node, d) :: search.results.(d);
-        IntMap.iter
-          (* a lower bound for the distance to node, based on the triangle inequality *)
-          (fun bucket node -> push_search_node search node (max search.min_dist (d-(from_bucket bucket))))
-          bktree.children;
-        more_results search
+	if d < search.cutoff then search.results.(d) <- (bktree.root_node, d) :: search.results.(d);
+	begin match bktree.pivot with 
+	| None -> ()
+	| Some pivot ->
+            IntMap.iter
+              (* a lower bound for the distance to node, based on the triangle inequality *)
+              (fun bucket node -> push_search_node search node (max search.min_dist (d-(from_bucket pivot bucket))))
+              bktree.children end;
+	more_results search
 
   (* Returns all nodes s.t query node < cutoff *)
   (* Requires: For all a. query a >= 0
