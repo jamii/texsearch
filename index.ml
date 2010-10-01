@@ -45,10 +45,9 @@ and preprocessed =
   < json : Json_type.t
   ; plain : string >
 
-type eqn_node = 
+type equation = 
   { doi : doi
-  ; eqnID : eqnID
-  ; latex : Latex.t }
+  ; eqnID : eqnID }
 
 (* json-static converts json into objects which cannot be stored using Marshal, so store metadata record instead *)
 type metadata = 
@@ -88,22 +87,10 @@ end)
 
 (* Our main index structure *)
 
-module Eqn_node_metric : (
-sig 
-  type t = eqn_node
-  val dist : eqn_node -> eqn_node -> int
-end) =
-struct
-  type t = eqn_node
-  let dist a b = Edit.left_edit_distance a.latex b.latex
-end
-
-module Index_tree = Bktree.Make (Eqn_node_metric)
-
 type index =
   { last_update : int (* Key of the last update received from couchdb *)
-  ; index_tree : Index_tree.t
-  ; metadata : metadata Doi_map.t }
+  ; metadata : metadata Doi_map.t
+  ; suffix_array : equation Suffix_array.t }
 
 (* Persisting *)
 
@@ -193,16 +180,14 @@ let with_timeout tsecs f =
 
 let run_query index query cutoff filter limit =
   let eqns = 
-    Util.list_of_stream 
-    (Index_tree.run_query 
-      (fun eqn_node -> Query.query_dist query eqn_node.latex) 
-      (1+cutoff)
-      index.index_tree) in
+    match query with
+    | Query.Latex ([latex],_) ->
+	Suffix_array.find_approx index.suffix_array latex (1+cutoff) in
   (* Collate eqns by doi *)
   let doi_map =
     List.fold_left
-      (fun doi_map (eqn_node,weight) -> 
-        let (key, value) = (eqn_node.doi, (eqn_node.eqnID,weight)) in
+      (fun doi_map (weight,equation) -> 
+        let (key, value) = (equation.doi, (equation.eqnID,weight)) in
         Doi_map.update key (fun values -> value::values) [value] doi_map)
       Doi_map.empty      
       eqns in
@@ -213,7 +198,7 @@ let run_query index query cutoff filter limit =
   then 
     xml_error "LimitExceeded"
   else
-    let results = Doi_map.list_of doi_map in
+    let results = Doi_map.to_list doi_map in
     (* Insert metadata *)
     let results = List.map (fun (doi,eqns) -> (doi, Doi_map.find doi index.metadata, eqns)) results in
     (* Apply filter *)
@@ -264,8 +249,7 @@ let init_index () =
   then
     (flush_line "Saving index";
     (* We stick a dummy node at the base of the tree so we don't have to deal with empty trees *)
-    let index_tree = Index_tree.empty_branch {doi=""; eqnID=""; latex=Latex.empty()} in
-    save_index {last_update = -1; index_tree = index_tree; metadata = Doi_map.empty};
+    save_index {last_update = -1; suffix_array = Suffix_array.empty (); metadata = Doi_map.empty};
     flush_line "Ok")
   else
     flush_line "Ok, nothing was done"
@@ -297,30 +281,27 @@ let run_update index update =
     (* Start by deleting old version of the document if it already exists *)
     let index = 
       if not (Doi_map.mem update#id index.metadata) then index else
-      let index_tree = 
-        match Index_tree.filter (fun eqn_node -> eqn_node.doi <> update#id) index.index_tree with
-          | Some index_tree -> index_tree
-          (* We somehow managed to delete the dummy node at the base of the tree *)
-          | None -> raise (FailedUpdate (update#key, update#id)) in
+      (* !!! delete stuff from sa *)
       let metadata = Doi_map.remove update#id index.metadata in
-      {index with index_tree=index_tree; metadata=metadata} in
+      {index with metadata=metadata} in
     (* Add the new version of the documents if the deleted flag is not set *)
     match (update#doc, update#value#deleted) with
-      | (None, _) | (_,true) -> {index with last_update=update#key}
+      | (None, _) | (_,true) -> 
+	  {index with last_update=update#key}
       | (Some json, false) ->
-          let doc = document_of_json json in
-          let index_tree =
-            List.fold_left 
-              (fun index_tree (eqnID,json) -> 
-                let lines = Latex.lines_of_json json in
-                List.fold_left 
-                  (fun index_tree latex -> Index_tree.add {doi=update#id; eqnID=eqnID; latex=latex} index_tree)
-                  index_tree
-                  lines)
-              index.index_tree
-              doc#content in
-          let metadata = Doi_map.add update#id (metadata_of_doc doc) index.metadata in
-          {last_update=update#key; index_tree=index_tree; metadata=metadata}
+	  begin
+            let doc = document_of_json json in
+	    let equations =
+	      Util.concat_map 
+		(fun (eqnID,json) ->
+		  List.map
+		    (fun line -> ({doi=update#id; eqnID=eqnID}, line))
+		    (Latex.lines_of_json json))
+		doc#content in
+            Suffix_array.add index.suffix_array equations;
+            let metadata = Doi_map.add update#id (metadata_of_doc doc) index.metadata in
+            {index with last_update=update#key; metadata=metadata}
+	  end
   with _ ->
     raise (FailedUpdate (update#key, update#id))
 
@@ -332,7 +313,6 @@ let rec run_update_batches index =
 
 let run_updates () = 
   Pid.lock ();
-  Util.expect_garbage ();
   flush_line ("couchdb is at " ^ couchdb_url);
   flush_line "Loading index";
   let index = load_index () in
@@ -347,6 +327,7 @@ let run_updates () =
 
 (* Introspection *)
 
+(*
 let list_all () =
   flush_line ("couchdb is at " ^ couchdb_url);
   flush_line "Loading index";
@@ -383,9 +364,10 @@ let list_nodes () =
   flush_line "Loading index";
   let index = load_index () in
   List.iter
-    (fun eqn_node ->
-      flush_line (string_of_int (Array.length eqn_node.latex)))
+    (fun equation ->
+      flush_line (string_of_int (Array.length equation.latex)))
     (Index_tree.to_list index.index_tree)
+*)
 
 (* Main *)
 
@@ -394,8 +376,8 @@ let _ = parse
   [("-init", Unit init_index, ": Create an empty index")
   ;("-update", Unit run_updates, ": Update the index")
   ;("-query", Unit handle_queries, ": Handle index queries as a couchdb _external")
-  ;("-list_all", Unit list_all, ": List all indexed keys")
+  (*;("-list_all", Unit list_all, ": List all indexed keys")
   ;("-list", String list_one, ": List the entry for a given key")
-  ;("-list_nodes", Unit list_nodes, ": Debugging tool: list the lengths of each equation node")]
+  ;("-list_nodes", Unit list_nodes, ": Debugging tool: list the lengths of each equation node")*)]
   ignore
   "Use 'index -help' for available options"
