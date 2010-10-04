@@ -106,7 +106,7 @@ let load_index () =
 let save_index index =
   try
     let index_file = open_out_bin "./index_store_tmp" in
-    Marshal.to_channel index_file index [Marshal.No_sharing' Marshal.Closures];
+    Marshal.to_channel index_file index [Marshal.No_sharing; Marshal.Closures];
     close_out index_file;
     Unix.rename "./index_store_tmp" "./index_store"
   with _ ->
