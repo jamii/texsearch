@@ -41,8 +41,8 @@ let add_latex sa (opaque, latex) =
 let add sa latexs =
   let ids = List.map (add_latex sa) latexs in
   let new_suffixes = Util.concat_map (suffixes sa) ids in
-  let array = Array.of_list (new_suffixes @ Array.to_list sa.array) in
-  Array.fast_sort (compare_suffix sa) array; (* replace by merge of list *)
+  let cmp = compare_suffix sa in
+  let array = Array.of_list (List.merge cmp (List.fast_sort cmp new_suffixes) (Array.to_list sa.array)) in
   sa.array <- array
 
 let is_prefix sa latex1 (id,pos) =
