@@ -11,31 +11,31 @@ module Hashset =
   end
 
 type 'a t =
-  { latexs : (id, Latex.t) Hashtbl.t 
-  ; opaques : (id, 'a) Hashtbl.t
+  { latexs : Latex.t DynArray.t 
+  ; opaques : 'a DynArray.t
   ; mutable next_id : id
   ; mutable array : (id * pos) array }
 
-let empty () =
-  { latexs = Hashtbl.create 0
-  ; opaques = Hashtbl.create 0
+let create () =
+  { latexs = DynArray.create ()
+  ; opaques = DynArray.create ()
   ; next_id = 0
   ; array = Array.make 0 (0,0) }
 
 let compare_suffix sa (id1,pos1) (id2,pos2) =
-  let latex1, latex2 = Hashtbl.find sa.latexs id1, Hashtbl.find sa.latexs id2 in
+  let latex1, latex2 = DynArray.get sa.latexs id1, DynArray.get sa.latexs id2 in
   Latex.compare_suffix (latex1,pos1) (latex2,pos2)
 
 let suffixes sa id =
-  let latex = Hashtbl.find sa.latexs id in
+  let latex = DynArray.get sa.latexs id in
   let n = Latex.length latex in
   List.map (fun pos -> (id,pos)) (Util.range 0 n)
 
 let add_latex sa (opaque, latex) =
   let id = sa.next_id in
   sa.next_id <- id + 1;
-  Hashtbl.add sa.opaques id opaque;
-  Hashtbl.add sa.latexs id latex;
+  DynArray.set sa.opaques id opaque;
+  DynArray.set sa.latexs id latex;
   id
 
 let add sa latexs =
@@ -46,11 +46,11 @@ let add sa latexs =
   sa.array <- array
 
 let is_prefix sa latex1 (id,pos) =
-  let latex2 = Hashtbl.find sa.latexs id in
+  let latex2 = DynArray.get sa.latexs id in
   Latex.is_prefix (latex1,0) (latex2,pos)
 
 let less_than sa latex1 (id,pos) =
-  let latex2 = Hashtbl.find sa.latexs id in
+  let latex2 = DynArray.get sa.latexs id in
   (Latex.compare_suffix (latex1,0) (latex2,pos)) < 0
 
 (* binary search *)
@@ -77,7 +77,7 @@ let find_exact_into ids sa latex =
   traverse (narrow 0 (n-1)) (* !!! think about edge conditions of narrow *)
 
 let exact_match sa id =
-  Hashtbl.find sa.opaques id
+  DynArray.get sa.opaques id
 
 let find_exact sa latex =
   let ids = Hashset.create 0 in
@@ -85,11 +85,11 @@ let find_exact sa latex =
   List.map (exact_match sa) (Hashset.to_list ids)
 
 let approx_match sa latex1 k id =
-  let latex2 = Hashtbl.find sa.latexs id in
+  let latex2 = DynArray.get sa.latexs id in
   let dist = Edit.left_edit_distance latex1 latex2 in
   if dist < k 
   then 
-    let opaque = Hashtbl.find sa.opaques id in
+    let opaque = DynArray.get sa.opaques id in
     Some (dist, opaque) 
   else 
     None

@@ -1,5 +1,6 @@
 #!/bin/bash
 ocamlfind ocamlopt -linkpkg \
+    -package extlib \
     -package netclient \
     -package json-wheel \
     -package json-static \
