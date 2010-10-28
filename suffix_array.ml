@@ -34,8 +34,8 @@ let suffixes sa id =
 let add_latex sa (opaque, latex) =
   let id = sa.next_id in
   sa.next_id <- id + 1;
-  DynArray.set sa.opaques id opaque;
-  DynArray.set sa.latexs id latex;
+  DynArray.add sa.opaques opaque;
+  DynArray.add sa.latexs latex;
   id
 
 let add sa latexs =
