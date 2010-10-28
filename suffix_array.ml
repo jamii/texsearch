@@ -49,17 +49,17 @@ let is_prefix sa latex1 (id,pos) =
   let latex2 = DynArray.get sa.latexs id in
   Latex.is_prefix (latex1,0) (latex2,pos)
 
-let less_than sa latex1 (id,pos) =
+let leq sa latex1 (id,pos) =
   let latex2 = DynArray.get sa.latexs id in
-  (Latex.compare_suffix (latex1,0) (latex2,pos)) < 0
+  (Latex.compare_suffix (latex1,0) (latex2,pos)) <= 0
 
 (* binary search *)
 let find_exact_into ids sa latex =
   (* find beginning of region *)
   let rec narrow lo hi =
-    if lo = hi then lo else
     let mid = lo + ((hi-lo) / 2) in
-    if less_than sa latex sa.array.(mid)
+    if mid = lo then lo else
+    if leq sa latex sa.array.(mid)
     then narrow lo mid
     else narrow mid hi in
   let ids = Hashset.create 0 in
@@ -74,7 +74,7 @@ let find_exact_into ids sa latex =
 	traverse (index+1)
       end
     else () in
-  traverse (narrow 0 (n-1)) (* !!! think about edge conditions of narrow *)
+  traverse (narrow 0 n)
 
 let exact_match sa id =
   DynArray.get sa.opaques id
