@@ -16,3 +16,15 @@ ocamlfind ocamlopt -linkpkg \
     query.ml \
     index.ml \
 -o index
+
+ocamlfind ocamlmktop -linkpkg \
+    -package extlib \
+    -package str \
+    -syntax camlp4o \
+    -package json-static \
+    util.mli util.ml \
+    latex.mli latex.ml \
+    edit.ml \
+    suffix_array.mli suffix_array.ml \
+    suffix_array_test.ml \
+-o test

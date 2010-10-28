@@ -3,6 +3,8 @@ type t = int array
 val empty : unit -> t
 val length : t -> int
 
+val of_array : int array -> t
+
 val of_json : Json_type.t -> t
 val lines_of_json : Json_type.t -> t list
 val to_json : t -> Json_type.t

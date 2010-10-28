@@ -12,6 +12,8 @@ type t = int array
 
 let empty () = Array.make 0 0
 
+let of_array array = array
+
 exception Parse_error
 
 let rec element_of_json json =
