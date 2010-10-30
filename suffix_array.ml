@@ -6,7 +6,7 @@ module Hashset =
     type 'a t = ('a, unit) Hashtbl.t
     let create = Hashtbl.create
     let mem = Hashtbl.mem
-    let add ht key = Hashtbl.add ht key ()
+    let add ht key = Hashtbl.replace ht key ()
     let to_list ht = Hashtbl.fold (fun k v rest -> k :: rest) ht []
   end
 
