@@ -56,13 +56,14 @@ let leq sa latex1 (id,pos) =
 (* binary search *)
 let find_exact_into ids sa latex =
   (* find beginning of region *)
+  (* lo < latex *)
+  (* hi >= latex *)
   let rec narrow lo hi =
     let mid = lo + ((hi-lo) / 2) in
-    if mid = lo then lo else
+    if lo = mid then hi else
     if leq sa latex sa.array.(mid)
     then narrow lo mid
     else narrow mid hi in
-  let ids = Hashset.create 0 in
   let n = Array.length sa.array in
   let rec traverse index =
     if index >= n then () else
@@ -74,7 +75,7 @@ let find_exact_into ids sa latex =
 	traverse (index+1)
       end
     else () in
-  traverse (narrow 0 n)
+  traverse (narrow (-1) (n-1))
 
 let exact_match sa id =
   DynArray.get sa.opaques id
