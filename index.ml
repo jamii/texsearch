@@ -25,8 +25,8 @@ and request =
     ; ?searchTimeout : string = "10.0"
     ; ?preprocessorTimeout : string = "5.0"
     ; ?limit : string = "1000"
-    ; ?start : int = 0
-    ; ?count : int = max_int
+    ; ?start : string = "0"
+    ; ?count : string = string_of_int max_int
     ; ?doi : string option 
     ; ?containerID : containerID option
     ; ?publishedAfter : publicationYear option
@@ -219,6 +219,8 @@ let handle_query index str =
     let searchTimeout = float_of_string args#searchTimeout in
     let preprocessorTimeout = args#preprocessorTimeout in
     let limit = int_of_string args#limit in
+    let start = int_of_string args#start in
+    let count = int_of_string args#count in
     let query = Query.of_string (preprocess preprocessorTimeout) args#searchTerm in
     let cutoff =
       match args#cutoff with
@@ -229,7 +231,7 @@ let handle_query index str =
       &&  ((args#doi = None) || (args#doi = Some (decode_doi doi)))
       &&  ((args#publishedBefore = None) || ((args#publishedBefore >= metadata.publicationYear) && (metadata.publicationYear <> None)))
       &&  ((args#publishedAfter  = None) || ((args#publishedAfter  <= metadata.publicationYear) && (metadata.publicationYear <> None))) in
-    xml_response (with_timeout searchTimeout (fun () -> run_query index query cutoff filter limit args#start args#count))
+    xml_response (with_timeout searchTimeout (fun () -> run_query index query cutoff filter limit start count))
   with
     | Json_type.Json_error _ | Failure _ -> xml_response (xml_error "ArgParseError")
     | Query.Parse_error -> xml_response (xml_error "QueryParseError")
