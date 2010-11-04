@@ -19,6 +19,7 @@ let test_search test search =
   Util.flush_line "Building...";
   let sa = Suffix_array.create () in
   Suffix_array.add sa items;
+  Suffix_array.prepare sa;
   Util.flush_line "Test...";
   let test_result = List.sort compare (test items latex) in
   Util.flush_line "Real...";

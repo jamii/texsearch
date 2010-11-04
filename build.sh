@@ -17,7 +17,7 @@ ocamlfind ocamlopt -linkpkg \
     index.ml \
 -o index
 
-ocamlfind ocamlmktop -linkpkg \
+ocamlfind ocamlmktop -linkpkg -g \
     -package extlib \
     -package str \
     -syntax camlp4o \

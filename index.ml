@@ -329,6 +329,9 @@ let run_updates () =
       flush_line ("Update " ^ (string_of_int key) ^ " failed (DOI: " ^ id ^ ")");
       index in
   flush_line ("Finished updating at update: " ^ (string_of_int index.last_update));
+  flush_line "Preparing index";
+  Suffix_array.prepare index.suffix_array;
+  save_index ();
   flush_line "Ok"
 
 (* Introspection *)

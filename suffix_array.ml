@@ -14,13 +14,15 @@ type 'a t =
   { latexs : Latex.t DynArray.t 
   ; opaques : 'a DynArray.t
   ; mutable next_id : id
-  ; mutable array : (id * pos) array }
+  ; mutable array : (id * pos) array
+  ; mutable unsorted : ('a * Latex.t) list }
 
 let create () =
   { latexs = DynArray.create ()
   ; opaques = DynArray.create ()
   ; next_id = 0
-  ; array = Array.make 0 (0,0) }
+  ; array = Array.make 0 (0,0)
+  ; unsorted = []}
 
 let compare_suffix sa (id1,pos1) (id2,pos2) =
   let latex1, latex2 = DynArray.get sa.latexs id1, DynArray.get sa.latexs id2 in
@@ -31,19 +33,23 @@ let suffixes sa id =
   let n = Latex.length latex in
   List.map (fun pos -> (id,pos)) (Util.range 0 n)
 
-let add_latex sa (opaque, latex) =
+let insert sa (opaque, latex) =
   let id = sa.next_id in
   sa.next_id <- id + 1;
   DynArray.add sa.opaques opaque;
   DynArray.add sa.latexs latex;
   id
 
-let add sa latexs =
-  let ids = List.map (add_latex sa) latexs in
+let prepare sa =
+  let ids = List.map (insert sa) sa.unsorted in
   let new_suffixes = Util.concat_map (suffixes sa) ids in
   let cmp = compare_suffix sa in
   let array = Array.of_list (List.merge cmp (List.fast_sort cmp new_suffixes) (Array.to_list sa.array)) in
+  sa.unsorted <- [];
   sa.array <- array
+
+let add sa latexs =
+  sa.unsorted <- latexs @ sa.unsorted
 
 let is_prefix sa latex1 (id,pos) =
   let latex2 = DynArray.get sa.latexs id in
