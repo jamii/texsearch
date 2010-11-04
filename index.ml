@@ -262,7 +262,7 @@ let init_index () =
 
 (* Updating the index *)
 
-let batch_size = 1000
+let batch_size = 100000
 
 let get_update_batch last_update =
   flush_line
