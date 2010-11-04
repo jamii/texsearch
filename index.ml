@@ -25,6 +25,8 @@ and request =
     ; ?searchTimeout : string = "10.0"
     ; ?preprocessorTimeout : string = "5.0"
     ; ?limit : string = "1000"
+    ; ?start : int = 0
+    ; ?count : int = max_int
     ; ?doi : string option 
     ; ?containerID : containerID option
     ; ?publishedAfter : publicationYear option
@@ -178,7 +180,7 @@ let with_timeout tsecs f =
 
 (* Queries *)
 
-let run_query index query cutoff filter limit =
+let run_query index query cutoff filter limit start count =
   let eqns = 
     match query with
     | Query.Latex ([latex],_) ->
@@ -207,6 +209,8 @@ let run_query index query cutoff filter limit =
     let results = List.map (fun (doi,metadata,eqns) -> (doi,metadata,List.fast_sort (fun a b -> compare (snd a) (snd b)) eqns)) results in
     (* Sort doi's by lowest weighted equation *)
     let results = List.fast_sort (fun (_,_,eqnsA) (_,_,eqnsB) -> compare (snd (List.hd eqnsA)) (snd (List.hd eqnsB))) results in
+    (* Return the chosen page *)
+    let results = ExtList.List.take count (ExtList.List.drop start results) in
     xml_of_results results (Query.to_string query)
 
 let handle_query index str =
@@ -225,7 +229,7 @@ let handle_query index str =
       &&  ((args#doi = None) || (args#doi = Some (decode_doi doi)))
       &&  ((args#publishedBefore = None) || ((args#publishedBefore >= metadata.publicationYear) && (metadata.publicationYear <> None)))
       &&  ((args#publishedAfter  = None) || ((args#publishedAfter  <= metadata.publicationYear) && (metadata.publicationYear <> None))) in
-    xml_response (with_timeout searchTimeout (fun () -> run_query index query cutoff filter limit))
+    xml_response (with_timeout searchTimeout (fun () -> run_query index query cutoff filter limit args#start args#count))
   with
     | Json_type.Json_error _ | Failure _ -> xml_response (xml_error "ArgParseError")
     | Query.Parse_error -> xml_response (xml_error "QueryParseError")
