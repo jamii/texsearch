@@ -8,6 +8,7 @@ ocamlfind ocamlopt -linkpkg \
     -package str \
     -syntax camlp4o \
     -package json-static \
+    dynArray.mli dynArray.ml \
     util.mli util.ml \
     pid.mli pid.ml \
     latex.mli latex.ml \
@@ -22,6 +23,7 @@ ocamlfind ocamlmktop -linkpkg -g \
     -package str \
     -syntax camlp4o \
     -package json-static \
+    dynArray.mli dynArray.ml \
     util.mli util.ml \
     latex.mli latex.ml \
     edit.ml \

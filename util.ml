@@ -32,7 +32,7 @@ let load_data filename =
 let save_data filename data =
   try
     let data_file = open_out_bin (filename ^ "_tmp") in
-    Marshal.to_channel data_file data [Marshal.Closures];
+    Marshal.to_channel data_file data [];
     close_out data_file;
     Unix.rename (filename ^ "_tmp") filename
   with _ ->
