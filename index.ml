@@ -96,24 +96,9 @@ type index =
 
 (* Persisting *)
 
-let load_index () =
-  try
-    let index_file = open_in_bin "./index_store" in
-    let index = (Marshal.from_channel index_file : index) in
-    close_in index_file; index
-  with _ ->
-    flush_line "Error opening file ./index_store";
-    raise Exit
+let load_index () = (Util.load_data "./index_store" : index)
 
-let save_index index =
-  try
-    let index_file = open_out_bin "./index_store_tmp" in
-    Marshal.to_channel index_file index [Marshal.No_sharing; Marshal.Closures];
-    close_out index_file;
-    Unix.rename "./index_store_tmp" "./index_store"
-  with _ ->
-    flush_line "Error saving to file ./index_store";
-    raise Exit
+let save_index index = Util.save_data "./index_store" index
 
 (* Database interaction *)
 

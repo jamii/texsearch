@@ -10,6 +10,9 @@ val range : int -> int -> int list
 
 val list_of_stream : 'a Stream.t -> 'a list
 
+val load_data : string -> 'a
+val save_data : string -> 'a -> unit
+
 module type MAP =
 sig
   include Map.S
