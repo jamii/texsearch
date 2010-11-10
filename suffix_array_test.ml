@@ -17,7 +17,8 @@ let test_search test search n =
   let ids = Util.range 0 (List.length latexs) in
   let items = List.combine ids latexs in
   Util.flush_line "Building...";
-  let sa = Suffix_array.create () in
+  Util.save_data "sa_test" (Suffix_array.create ());
+  let sa = Util.load_data "sa_test" in
   Suffix_array.add sa items;
   Suffix_array.prepare sa;
   Util.flush_line "Test...";
