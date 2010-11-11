@@ -21,10 +21,12 @@ let test_search test search n =
   let ids = random_list n (fun () -> random_string 1000) in
   let items = List.combine ids latexs in
   Util.flush_line "Building...";
-  Util.save_data "sa_test" (Suffix_array.create ());
-  let sa = Util.load_data "sa_test" in
+  let sa = Suffix_array.create () in
   Suffix_array.add sa items;
   Suffix_array.prepare sa;
+  Util.flush_line "Saving...";
+  Util.save_data "sa_test" sa;
+  let sa = Util.load_data "sa_test" in
   Util.flush_line "Test...";
   let test_result = List.sort compare (test items latex) in
   Util.flush_line "Real...";
