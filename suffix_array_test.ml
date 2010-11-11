@@ -1,20 +1,24 @@
-let random_array max_length gen =
-  let length = (1 + Random.int max_length) in
+let random_array length gen =
   Array.map (fun _ -> gen ()) (Array.make length 0) 
 
-let random_list max_length gen =
-  Array.to_list (random_array max_length gen)
+let random_list length gen =
+  Array.to_list (random_array length gen)
 
 let random_latex_element () = 
   Random.int 50
 
 let random_latex max_length =
-  Latex.of_array (random_array max_length random_latex_element)
+  let length = (1 + Random.int max_length) in
+  Latex.of_array (random_array length random_latex_element)
+
+let random_string max_length =
+  let length = (1 + Random.int max_length) in
+  String.create length (* unitialised memory is fine *)
 
 let test_search test search n =
   let latex = random_latex 5 in
   let latexs = random_list n (fun () -> random_latex 1000) in
-  let ids = Util.range 0 (List.length latexs) in
+  let ids = random_list n (fun () -> random_string 1000) in
   let items = List.combine ids latexs in
   Util.flush_line "Building...";
   Util.save_data "sa_test" (Suffix_array.create ());
@@ -25,7 +29,7 @@ let test_search test search n =
   let test_result = List.sort compare (test items latex) in
   Util.flush_line "Real...";
   let real_result = List.sort compare (search sa latex) in
-  (test_result = real_result, test_result, real_result)
+  (test_result = real_result, List.length test_result, List.length real_result)
 
 let test_exact_search n =
   let test items latex = 
