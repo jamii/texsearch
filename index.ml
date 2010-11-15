@@ -98,7 +98,7 @@ type index =
 
 let load_index () = (Util.load_data "./index_store" : index)
 
-let save_index index = Util.save_data "./index_store" index
+let save_index index = Util.save_data "./index_store" (index : index)
 
 (* Database interaction *)
 
@@ -316,7 +316,7 @@ let run_updates () =
   flush_line ("Finished updating at update: " ^ (string_of_int index.last_update));
   flush_line "Preparing index";
   Suffix_array.prepare index.suffix_array;
-  save_index ();
+  save_index index;
   flush_line "Ok"
 
 (* Introspection *)
