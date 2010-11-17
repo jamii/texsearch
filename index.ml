@@ -283,7 +283,7 @@ let run_update index update =
 	  begin
             let doc = document_of_json json in
 	    let equations =
-	      Util.map 
+	      List.map 
 		(fun (eqnID,json) -> ({doi=update#id; eqnID=eqnID}, Latex.of_json json))
 		doc#content in
             Suffix_array.add index.suffix_array equations;
