@@ -2,14 +2,14 @@
 
 (* The query type *)
 type t =
-  | Latex of (Latex.t list) * string (* Store the string version so we can send the query back to the users *)
+  | Latex of Latex.t * string (* Store the string version so we can send the query back to the users *)
   | And of t * t
   | Or of t * t
 
 (* Longest latex string in query *)
 let rec max_length query =
   match query with
-    | Latex (lines,_) -> Util.maximum (List.map Array.length lines)
+    | Latex (latex,_) -> Latex.length latex
     | And (query1,query2) -> max (max_length query1) (max_length query2)
     | Or (query1,query2) -> max (max_length query1) (max_length query2)
 
@@ -47,8 +47,8 @@ let parse_query preprocesser tokens =
       | [< 'Delim "("; q=parse_expr; 'Delim ")" >] -> q
       | [< 'Delim delim when is_quoted_string delim >] -> 
           let text = String.sub delim 1 (String.length delim - 2) in
-          let (lines, plain) = preprocesser text in
-          Latex (lines, plain)
+          let (latex, plain) = preprocesser text in
+          Latex (latex, plain)
 
   and parse_expr = 
     parser
@@ -84,6 +84,6 @@ let rec to_string query =
 (* With the Edit.left_edit_distance as a quasi-metric this is a valid query for the bktree index *)
 let rec query_dist query latex =
   match query with
-    | Latex (lines,_) -> Util.minimum (List.map (fun line -> Edit.left_edit_distance line latex) lines)
+    | Latex (latex2,_) ->Edit.left_edit_distance latex2 latex
     | And (query1,query2) -> max (query_dist query1 latex) (query_dist query2 latex)
     | Or (query1,query2) -> min (query_dist query1 latex) (query_dist query2 latex)

@@ -45,7 +45,7 @@ let test_approx_search n =
   let test items latex =
     let distance = min distance (Latex.length latex) in
     Util.filter_map 
-      (fun (id,latex2) -> 
+      (fun (id,latex2) ->
 	if Edit.left_edit_distance latex latex2 < distance
 	then Some id
 	else None)

@@ -30,17 +30,6 @@ and element_list_of_json json =
 let of_json json =
   Array.of_list (List.map Hashtbl.hash (element_list_of_json json))
 
-(* Parsing elements from json, splitting at line boundaries *)
-let lines_of_json json =
-  let rec lines line el =
-    match el with
-      | [] -> [line]
-      | ((Command "\\")::el) | ((Command "ArrayCell")::el) -> (List.rev line) :: (lines [] el)
-      | (e::el) -> lines (e::line) el in
-  List.map 
-    (fun line -> Array.of_list (List.map Hashtbl.hash line)) 
-    (lines [] (element_list_of_json json))
-
 (* Defined to make json-static happy, not used *)
 let to_json latex = Json_type.Null
 
@@ -71,7 +60,7 @@ let is_prefix (latex1, pos1) (latex2, pos2) =
     is_prefix' (pos1+1) (pos2+1) in
   is_prefix' pos1 pos2
 
-(* Divide latex into k equal(ish) substrings *)
+(* Divide latex into k substrings of equal(ish) lengths *)
 let fragments latex k =
   let n = length latex in
   let size = n / k in

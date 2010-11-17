@@ -123,7 +123,7 @@ let get_document doi =
 let preprocess timeout latex_string =
   let url = db_url ^ "_external/preprocess?format=json-plain&timeout=" ^ (encode timeout) ^ "&latex=" ^ (encode latex_string) in
   let preprocessed = preprocessed_of_json (Json_io.json_of_string (Http.http_get url)) in
-  (Latex.lines_of_json preprocessed#json,preprocessed#plain)
+  (Latex.of_json preprocessed#json,preprocessed#plain)
 
 (* Responses to couchdb *)
 
@@ -168,7 +168,7 @@ let with_timeout tsecs f =
 let run_query index query cutoff filter limit start count =
   let eqns = 
     match query with
-    | Query.Latex ([latex],_) ->
+    | Query.Latex (latex,_) ->
 	Suffix_array.find_approx index.suffix_array latex (1+cutoff) in
   (* Collate eqns by doi *)
   let doi_map =
@@ -283,11 +283,8 @@ let run_update index update =
 	  begin
             let doc = document_of_json json in
 	    let equations =
-	      Util.concat_map 
-		(fun (eqnID,json) ->
-		  List.map
-		    (fun line -> ({doi=update#id; eqnID=eqnID}, line))
-		    (Latex.lines_of_json json))
+	      Util.map 
+		(fun (eqnID,json) -> ({doi=update#id; eqnID=eqnID}, Latex.of_json json))
 		doc#content in
             Suffix_array.add index.suffix_array equations;
             let metadata = Doi_map.add update#id (metadata_of_doc doc) index.metadata in
