@@ -20,17 +20,12 @@ let test_search test search n =
   let latexs = random_list n (fun () -> random_latex 1000) in
   let ids = random_list n (fun () -> random_string 1000) in
   let items = List.combine ids latexs in
-  Util.flush_line "Building...";
   let sa = Suffix_array.create () in
   Suffix_array.add sa items;
   Suffix_array.prepare sa;
-  Util.flush_line "Saving...";
-  Util.save_data "sa_test" sa;
-  let sa = Util.load_data "sa_test" in
-  Util.flush_line "Test...";
   let test_result = List.sort compare (test items latex) in
-  Util.flush_line "Real...";
   let real_result = List.sort compare (search sa latex) in
+  if test_result <> real_result then Util.flush_line "Fail!" else ();
   (test_result = real_result, List.length test_result, List.length real_result)
 
 let test_exact_search n =
