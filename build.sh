@@ -1,4 +1,18 @@
 #!/bin/bash
+
+ocamlfind ocamlmktop -linkpkg -g \
+    -package extlib \
+    -package str \
+    -syntax camlp4o \
+    -package json-static \
+    dynArray.mli dynArray.ml \
+    util.mli util.ml \
+    latex.mli latex.ml \
+    edit.ml \
+    suffix_array.mli suffix_array.ml \
+    suffix_array_test.ml \
+-o test
+
 ocamlfind ocamlopt -linkpkg \
     -package extlib \
     -package netclient \
@@ -17,16 +31,3 @@ ocamlfind ocamlopt -linkpkg \
     query.ml \
     index.ml \
 -o index
-
-ocamlfind ocamlmktop -linkpkg -g \
-    -package extlib \
-    -package str \
-    -syntax camlp4o \
-    -package json-static \
-    dynArray.mli dynArray.ml \
-    util.mli util.ml \
-    latex.mli latex.ml \
-    edit.ml \
-    suffix_array.mli suffix_array.ml \
-    suffix_array_test.ml \
--o test
