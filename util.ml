@@ -88,3 +88,6 @@ let expect_garbage () =
       space_overhead = 200
     }
 
+let backtrace f =
+  Printexc.record_backtrace true;
+  try Printexc.print f (); () with _ -> Printexc.print_backtrace stdout

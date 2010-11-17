@@ -25,3 +25,5 @@ sig
 end
 
 module Make_map (Ord : Map.OrderedType) : (MAP with type key = Ord.t)
+
+val backtrace : (unit -> 'a) -> unit
