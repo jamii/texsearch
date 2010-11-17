@@ -41,8 +41,9 @@ let test_exact_search n =
   test_search test search n
 
 let test_approx_search n =
-  let distance = Random.int 5 in
+  let distance = 1 + (Random.int 4) in
   let test items latex =
+    let distance = min distance (Latex.length latex) in
     Util.filter_map 
       (fun (id,latex2) -> 
 	if Edit.left_edit_distance latex latex2 < distance
@@ -50,6 +51,7 @@ let test_approx_search n =
 	else None)
       items in
   let search sa latex =
+    let distance = min distance (Latex.length latex) in
     let results = Suffix_array.find_approx sa latex distance in
     List.map (fun (_,id) -> id) results in
   test_search test search n
