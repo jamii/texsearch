@@ -37,26 +37,26 @@ let length = Array.length
 
 type pos = int
 
-let compare_suffix (latex1, pos1) (latex2, pos2) =
-  let n1, n2 = length latex1, length latex2 in
+let compare_suffix (latexL, pos1) (latexR, pos2) =
+  let n1, n2 = length latexL, length latexR in
   let rec compare_suffix' pos1 pos2 =
     match (pos1 >= n1, pos2 >= n2) with
     | (true, true) -> 0
     | (true, false) -> -1
     | (false, true) ->  1
     | (false, false) ->
-	let cmp = compare latex1.(pos1) latex2.(pos2) in
+	let cmp = compare latexL.(pos1) latexR.(pos2) in
 	if cmp < 0 then -1 else
 	if cmp > 0 then  1 else
 	compare_suffix' (pos1+1) (pos2+1) in
   compare_suffix' pos1 pos2
 
-let is_prefix (latex1, pos1) (latex2, pos2) =
-  let n1, n2 = length latex1, length latex2 in
+let is_prefix (latexL, pos1) (latexR, pos2) =
+  let n1, n2 = length latexL, length latexR in
   let rec is_prefix' pos1 pos2 =
     if pos1 >= n1 then true else
     if pos2 >= n2 then false else
-    if latex1.(pos1) != latex2.(pos2) then false else
+    if latexL.(pos1) != latexR.(pos2) then false else
     is_prefix' (pos1+1) (pos2+1) in
   is_prefix' pos1 pos2
 

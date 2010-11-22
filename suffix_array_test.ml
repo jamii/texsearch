@@ -33,49 +33,49 @@ let test_find test find n =
   if test_result <> real_result then Util.flush_line "Fail!" else Util.flush_line "Pass!";
   (test_result = real_result, List.length test_result, List.length real_result)
 
-let exact_match latex1 latex2 = 
-  Latex.distance latex1 latex2 = 0
+let exact_match latexL latexR = 
+  Latex.distance latexL latexR = 0
 
 let test_find_exact n =
-  let latex = random_latex 5 in
+  let latexL = random_latex 5 in
   let test items = 
     Util.filter_map 
-      (fun (id,latex2) -> 
-	if exact_match latex latex2
+      (fun (id,latexR) -> 
+	if exact_match latexL latexR
 	then Some id
 	else None)
       items in
   let find sa =
-    Suffix_array.find_exact sa latex in
+    Suffix_array.find_exact sa latexL in
   test_find test find n
 
-let approx_match precision latex1 latex2 =
-  Latex.similar precision latex1 latex2 <> None
+let approx_match precision latexL latexR =
+  Latex.similar precision latexL latexR <> None
 
 let test_find_approx n =
-  let latex = random_latex 5 in
+  let latexL = random_latex 5 in
   let precision = Random.float 1.0 in
   let test items =
     Util.filter_map 
-      (fun (id,latex2) ->
-	if approx_match precision latex latex2
+      (fun (id,latexR) ->
+	if approx_match precision latexL latexR
 	then Some id
 	else None)
       items in
   let find sa =
-    Suffix_array.find_approx sa precision latex in
+    Suffix_array.find_approx sa precision latexL in
   test_find test find n
 
-let rec query_match precision query latex2 =
-  Query.similar precision query latex2 <> None
+let rec query_match precision query latexR =
+  Query.similar precision query latexR <> None
 
 let test_find_query n =
   let query = random_query 5 in
   let precision = Random.float 1.0 in
   let test items =
     Util.filter_map 
-      (fun (id,latex2) ->
-	if query_match precision query latex2
+      (fun (id,latexR) ->
+	if query_match precision query latexR
 	then Some id
 	else None)
       items in

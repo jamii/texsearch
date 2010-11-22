@@ -41,8 +41,8 @@ let create () =
   ; unsorted = []}
 
 let compare_suffix sa (id1,pos1) (id2,pos2) =
-  let latex1, latex2 = DynArray.get sa.latexs id1, DynArray.get sa.latexs id2 in
-  Latex.compare_suffix (latex1,pos1) (latex2,pos2)
+  let latexL, latexR = DynArray.get sa.latexs id1, DynArray.get sa.latexs id2 in
+  Latex.compare_suffix (latexL,pos1) (latexR,pos2)
 
 let suffixes sa id =
   let latex = DynArray.get sa.latexs id in
@@ -67,13 +67,13 @@ let prepare sa =
 let add sa latexs =
   sa.unsorted <- latexs @ sa.unsorted
 
-let is_prefix sa latex1 (id,pos) =
-  let latex2 = DynArray.get sa.latexs id in
-  Latex.is_prefix (latex1,0) (latex2,pos)
+let is_prefix sa latexL (id,pos) =
+  let latexR = DynArray.get sa.latexs id in
+  Latex.is_prefix (latexL,0) (latexR,pos)
 
-let leq sa latex1 (id,pos) =
-  let latex2 = DynArray.get sa.latexs id in
-  (Latex.compare_suffix (latex1,0) (latex2,pos)) <= 0
+let leq sa latexL (id,pos) =
+  let latexR = DynArray.get sa.latexs id in
+  (Latex.compare_suffix (latexL,0) (latexR,pos)) <= 0
 
 (* binary search *)
 let gather_exact ids sa latex =
