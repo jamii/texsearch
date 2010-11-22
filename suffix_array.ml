@@ -107,15 +107,14 @@ let find_exact sa latex =
   gather_exact ids sa latex;
   List.map (exact_match sa) (Hashset.to_list ids)
 
-let approx_match sa latex1 k id =
-  let latex2 = DynArray.get sa.latexs id in
-  let dist = Latex.distance latex1 latex2 in
-  if dist < k 
-  then 
-    let opaque = DynArray.get sa.opaques id in
-    Some (dist, opaque) 
-  else 
-    None
+let approx_match sa precision latexL id =
+  let latexR = DynArray.get sa.latexs id in
+  match Latex.similar precision latexL latexR with
+  | Some dist ->
+      let opaque = DynArray.get sa.opaques id in
+      Some (dist, opaque) 
+  | None ->
+      None
 
 let gather_approx sa precision latex =
   let k = int_of_float (ceil ((1.0 -. precision) *. (float_of_int (Latex.length latex)))) in
@@ -124,34 +123,12 @@ let gather_approx sa precision latex =
   ids
 
 let find_approx sa precision latex =
-  let k = int_of_float (ceil ((1.0 -. precision) *. (float_of_int (Latex.length latex)))) in
   let ids = gather_approx sa precision latex in
-  Util.filter_map (approx_match sa latex k) (Hashset.to_list ids)
+  Util.filter_map (approx_match sa precision latex) (Hashset.to_list ids)
 
-(* replace by query_dist *)
-let rec query_match sa query precision id =
-  let rec qm query =
-    match query with
-    | Query.Latex (latex1,_) -> 
-	let k = int_of_float (ceil ((1.0 -. precision) *. (float_of_int (Latex.length latex1)))) in
-	let latex2 = DynArray.get sa.latexs id in
-	let dist = Latex.distance latex1 latex2 in
-	if dist < k then Some dist else None
-    | Query.And (query1, query2) -> 
-	begin
-	  match (qm query1, qm query2) with
-	  | (Some dist1, Some dist2) -> Some (max dist1 dist2)
-	  | _ -> None
-	end
-    | Query.Or (query1, query2) -> 
-	begin
-	  match (qm query1, qm query2) with
-	  | (Some dist1, Some dist2) -> Some (min dist1 dist2)
-	  | (Some dist1, None) -> Some dist1
-	  | (None, Some dist2) -> Some dist2
-	  | (None, None) -> None 
-	end in
-  match qm query with
+let rec query_match sa precision query id =
+  let latexR = DynArray.get sa.latexs id in
+  match Query.similar precision query latexR with
   | Some dist ->
       let opaque = DynArray.get sa.opaques id in
       Some (dist, opaque)
@@ -165,4 +142,4 @@ let find_query sa precision query =
     | Query.And (query1, query2) -> Hashset.inter (fq query1) (fq query2)
     | Query.Or (query1, query2) -> Hashset.union (fq query1) (fq query2) in
   let ids = fq query in
-  Util.filter_map (query_match sa query precision) (Hashset.to_list ids)
+  Util.filter_map (query_match sa precision query) (Hashset.to_list ids)

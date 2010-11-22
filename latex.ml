@@ -106,3 +106,8 @@ let distance latexL latexR =
           ((abs (compare latexL.(0) latexR.(r))) + cache.(1).(r+1))
   done;
   cache.(0).(0)
+
+let similar precision latexL latexR =
+  let cutoff = int_of_float (ceil ((1.0 -. precision) *. (float_of_int (length latexL)))) in
+  let dist = distance latexL latexR in
+  if dist < cutoff then Some dist else None

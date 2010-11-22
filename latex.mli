@@ -15,3 +15,4 @@ val is_prefix : (t * pos) -> (t * pos) -> bool
 val fragments : t -> int -> t list
 
 val distance : t -> t -> int
+val similar : float -> t -> t -> int option

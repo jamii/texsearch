@@ -86,3 +86,24 @@ let rec distance query latexR =
     | Latex (latexL,_) -> Latex.distance latexL latexR
     | And (query1,query2) -> max (distance query1 latexR) (distance query2 latexR)
     | Or (query1,query2) -> min (distance query1 latexR) (distance query2 latexR)
+
+let rec similar precision query latexR =
+  match query with
+  | Latex (latexL,_) -> 
+      let k = int_of_float (ceil ((1.0 -. precision) *. (float_of_int (Latex.length latexL)))) in
+      let dist = Latex.distance latexL latexR in
+      if dist < k then Some dist else None
+  | And (query1, query2) -> 
+      begin
+	match (similar precision query1 latexR, similar precision query2 latexR) with
+	| (Some dist1, Some dist2) -> Some (max dist1 dist2)
+	| _ -> None
+      end
+  | Or (query1, query2) -> 
+      begin
+	match (similar precision query1 latexR, similar precision query2 latexR) with
+	| (Some dist1, Some dist2) -> Some (min dist1 dist2)
+	| (Some dist1, None) -> Some dist1
+	| (None, Some dist2) -> Some dist2
+	| (None, None) -> None 
+      end

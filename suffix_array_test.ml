@@ -33,12 +33,15 @@ let test_find test find n =
   if test_result <> real_result then Util.flush_line "Fail!" else Util.flush_line "Pass!";
   (test_result = real_result, List.length test_result, List.length real_result)
 
+let exact_match latex1 latex2 = 
+  Latex.distance latex1 latex2 = 0
+
 let test_find_exact n =
   let latex = random_latex 5 in
   let test items = 
     Util.filter_map 
       (fun (id,latex2) -> 
-	if Latex.distance latex latex2 = 0
+	if exact_match latex latex2
 	then Some id
 	else None)
       items in
@@ -47,8 +50,7 @@ let test_find_exact n =
   test_find test find n
 
 let approx_match precision latex1 latex2 =
-  let cutoff = int_of_float (ceil ((1.0 -. precision) *. (float_of_int (Latex.length latex1)))) in
-  Latex.distance latex1 latex2 < cutoff
+  Latex.similar precision latex1 latex2 <> None
 
 let test_find_approx n =
   let latex = random_latex 5 in
@@ -65,10 +67,7 @@ let test_find_approx n =
   test_find test find n
 
 let rec query_match precision query latex2 =
-  match query with
-  | Query.Latex (latex1,_) -> approx_match precision latex1 latex2
-  | Query.And (query1, query2) -> (query_match precision query1 latex2) && (query_match precision query2 latex2)
-  | Query.Or (query1, query2) -> (query_match precision query1 latex2) || (query_match precision query2 latex2)
+  Query.similar precision query latex2 <> None
 
 let test_find_query n =
   let query = random_query 5 in
