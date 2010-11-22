@@ -76,7 +76,7 @@ let leq sa latex1 (id,pos) =
   (Latex.compare_suffix (latex1,0) (latex2,pos)) <= 0
 
 (* binary search *)
-let find_exact_into ids sa latex =
+let gather_exact ids sa latex =
   (* find beginning of region *)
   (* lo < latex *)
   (* hi >= latex *)
@@ -104,7 +104,7 @@ let exact_match sa id =
 
 let find_exact sa latex =
   let ids = Hashset.create 0 in
-  find_exact_into ids sa latex;
+  gather_exact ids sa latex;
   List.map (exact_match sa) (Hashset.to_list ids)
 
 let approx_match sa latex1 k id =
@@ -120,7 +120,7 @@ let approx_match sa latex1 k id =
 let gather_approx sa precision latex =
   let k = int_of_float (ceil ((1.0 -. precision) *. (float_of_int (Latex.length latex)))) in
   let ids = Hashset.create 0 in
-  List.iter (find_exact_into ids sa) (Latex.fragments latex k);
+  List.iter (gather_exact ids sa) (Latex.fragments latex k);
   ids
 
 let find_approx sa precision latex =
