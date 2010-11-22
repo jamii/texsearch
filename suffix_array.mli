@@ -11,5 +11,7 @@ type 'a t =
 val create : unit -> 'a t
 val add : 'a t -> ('a * Latex.t) list -> unit
 val prepare : 'a t -> unit
-val find_exact : 'a t -> Latex.t -> 'a list
-val find_approx : 'a t -> Latex.t -> int -> (int * 'a) list
+
+val find_exact : 'a t -> Latex.t -> (int * 'a) list
+val find_approx : 'a t -> float -> Latex.t -> (int * 'a) list
+val find_query : 'a t -> float -> Query.t -> (int * 'a) list

@@ -31,7 +31,6 @@ and request =
     ; ?containerID : containerID option
     ; ?publishedAfter : publicationYear option
     ; ?publishedBefore : publicationYear option
-    ; ?cutoff : string option
     ; ?precision : string = "0.7" > >
 
 and update =
@@ -165,11 +164,8 @@ let with_timeout tsecs f =
 
 (* Queries *)
 
-let run_query index query cutoff filter limit start count =
-  let eqns = 
-    match query with
-    | Query.Latex (latex,_) ->
-	Suffix_array.find_approx index.suffix_array latex (1+cutoff) in
+let run_query index query precision filter limit start count =
+  let eqns = Suffix_array.find_query index.suffix_array precision query in
   (* Collate eqns by doi *)
   let doi_map =
     List.fold_left
@@ -207,16 +203,13 @@ let handle_query index str =
     let start = int_of_string args#start in
     let count = int_of_string args#count in
     let query = Query.of_string (preprocess preprocessorTimeout) args#searchTerm in
-    let cutoff =
-      match args#cutoff with
-        | None -> int_of_float ((1.0 -. (float_of_string args#precision)) *. (float_of_int (Query.max_length query)))
-        | Some cutoff -> int_of_string cutoff in
+    let precision = float_of_string args#precision in
     let filter doi metadata = 
           ((args#containerID = None) || (args#containerID = metadata.containerID))
       &&  ((args#doi = None) || (args#doi = Some (decode_doi doi)))
       &&  ((args#publishedBefore = None) || ((args#publishedBefore >= metadata.publicationYear) && (metadata.publicationYear <> None)))
       &&  ((args#publishedAfter  = None) || ((args#publishedAfter  <= metadata.publicationYear) && (metadata.publicationYear <> None))) in
-    xml_response (with_timeout searchTimeout (fun () -> run_query index query cutoff filter limit start count))
+    xml_response (with_timeout searchTimeout (fun () -> run_query index query precision filter limit start count))
   with
     | Json_type.Json_error _ | Failure _ -> xml_response (xml_error "ArgParseError")
     | Query.Parse_error -> xml_response (xml_error "QueryParseError")

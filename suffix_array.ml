@@ -7,7 +7,23 @@ module Hashset =
     let create = Hashtbl.create
     let mem = Hashtbl.mem
     let add ht key = Hashtbl.replace ht key ()
+
     let to_list ht = Hashtbl.fold (fun k v rest -> k :: rest) ht []
+    let of_list list = 
+      let ht = create 0 in 
+      List.map (add ht) list;
+      ht
+
+    let union ht1 ht2 = 
+      let ht3 = create 0 in
+      Hashtbl.iter (fun key _ -> add ht3 key) ht1;
+      Hashtbl.iter (fun key _ -> add ht3 key) ht2;
+      ht3
+
+    let inter ht1 ht2 =
+      let ht3 = create 0 in
+      Hashtbl.iter (fun key _ -> if mem ht2 key then add ht3 key else ()) ht1;
+      ht3
   end
 
 type 'a t =
@@ -84,7 +100,7 @@ let find_exact_into ids sa latex =
   traverse (narrow (-1) (n-1))
 
 let exact_match sa id =
-  DynArray.get sa.opaques id
+  (0, DynArray.get sa.opaques id)
 
 let find_exact sa latex =
   let ids = Hashset.create 0 in
@@ -101,7 +117,52 @@ let approx_match sa latex1 k id =
   else 
     None
 
-let find_approx sa latex k =
+let gather_approx sa precision latex =
+  let k = int_of_float (ceil ((1.0 -. precision) *. (float_of_int (Latex.length latex)))) in
   let ids = Hashset.create 0 in
   List.iter (find_exact_into ids sa) (Latex.fragments latex k);
+  ids
+
+let find_approx sa precision latex =
+  let k = int_of_float (ceil ((1.0 -. precision) *. (float_of_int (Latex.length latex)))) in
+  let ids = gather_approx sa precision latex in
   Util.filter_map (approx_match sa latex k) (Hashset.to_list ids)
+
+(* replace by query_dist *)
+let rec query_match sa query precision id =
+  let rec qm query =
+    match query with
+    | Query.Latex (latex1,_) -> 
+	let k = int_of_float (ceil ((1.0 -. precision) *. (float_of_int (Latex.length latex1)))) in
+	let latex2 = DynArray.get sa.latexs id in
+	let dist = Edit.left_edit_distance latex1 latex2 in
+	if dist < k then Some dist else None
+    | Query.And (query1, query2) -> 
+	begin
+	  match (qm query1, qm query2) with
+	  | (Some dist1, Some dist2) -> Some (max dist1 dist2)
+	  | _ -> None
+	end
+    | Query.Or (query1, query2) -> 
+	begin
+	  match (qm query1, qm query2) with
+	  | (Some dist1, Some dist2) -> Some (min dist1 dist2)
+	  | (Some dist1, None) -> Some dist1
+	  | (None, Some dist2) -> Some dist2
+	  | (None, None) -> None 
+	end in
+  match qm query with
+  | Some dist ->
+      let opaque = DynArray.get sa.opaques id in
+      Some (dist, opaque)
+  | None -> 
+      None
+
+let find_query sa precision query = 
+  let rec fq query = (* gather_query *)
+    match query with
+    | Query.Latex (latex, _) -> gather_approx sa precision latex
+    | Query.And (query1, query2) -> Hashset.inter (fq query1) (fq query2)
+    | Query.Or (query1, query2) -> Hashset.union (fq query1) (fq query2) in
+  let ids = fq query in
+  Util.filter_map (query_match sa query precision) (Hashset.to_list ids)
