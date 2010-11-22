@@ -1,4 +1,4 @@
-module type S=
+module type S =
 sig
   include Map.S
 
