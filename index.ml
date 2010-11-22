@@ -74,13 +74,13 @@ let decode_doi doi = Str.replace_first (Str.regexp "_") "/" doi
 
 let flush_line = Util.flush_line
 
-module Doi_map = Util.Make_map 
+module Doi_map = MyMap.Make
 (struct
   type t = doi
   let compare = compare
 end)
 
-module Eqnid_map = Util.Make_map 
+module Eqnid_map = MyMap.Make
 (struct
   type t = eqnID
   let compare = compare

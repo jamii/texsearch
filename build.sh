@@ -7,6 +7,7 @@ ocamlfind ocamlmktop -linkpkg -g \
     -package json-static \
     dynArray.mli dynArray.ml \
     hashset.mli hashset.ml \
+    myMap.mli myMap.ml \
     util.mli util.ml \
     latex.mli latex.ml \
     query.ml \
@@ -25,6 +26,7 @@ ocamlfind ocamlopt -linkpkg \
     -package json-static \
     dynArray.mli dynArray.ml \
     hashset.mli hashset.ml \
+    myMap.mli myMap.ml \
     util.mli util.ml \
     pid.mli pid.ml \
     latex.mli latex.ml \
