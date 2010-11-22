@@ -38,7 +38,7 @@ let test_find_exact n =
   let test items = 
     Util.filter_map 
       (fun (id,latex2) -> 
-	if Edit.left_edit_distance latex latex2 = 0
+	if Latex.distance latex latex2 = 0
 	then Some id
 	else None)
       items in
@@ -48,7 +48,7 @@ let test_find_exact n =
 
 let approx_match precision latex1 latex2 =
   let cutoff = int_of_float (ceil ((1.0 -. precision) *. (float_of_int (Latex.length latex1)))) in
-  Edit.left_edit_distance latex1 latex2 < cutoff
+  Latex.distance latex1 latex2 < cutoff
 
 let test_find_approx n =
   let latex = random_latex 5 in

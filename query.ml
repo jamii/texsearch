@@ -81,9 +81,8 @@ let rec to_string query =
     | Or (query1,query2) -> "(" ^ (to_string query1) ^ " OR " ^ (to_string query2) ^ ")"
 
 (* Extending the edit distance on latex strings to edit distance on compound queries *)
-(* With the Edit.left_edit_distance as a quasi-metric this is a valid query for the bktree index *)
-let rec query_dist query latex =
+let rec distance query latexR =
   match query with
-    | Latex (latex2,_) ->Edit.left_edit_distance latex2 latex
-    | And (query1,query2) -> max (query_dist query1 latex) (query_dist query2 latex)
-    | Or (query1,query2) -> min (query_dist query1 latex) (query_dist query2 latex)
+    | Latex (latexL,_) -> Latex.distance latexL latexR
+    | And (query1,query2) -> max (distance query1 latexR) (distance query2 latexR)
+    | Or (query1,query2) -> min (distance query1 latexR) (distance query2 latexR)

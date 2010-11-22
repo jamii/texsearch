@@ -13,3 +13,5 @@ type pos = int
 val compare_suffix : (t * pos) -> (t * pos) -> int
 val is_prefix : (t * pos) -> (t * pos) -> bool
 val fragments : t -> int -> t list
+
+val distance : t -> t -> int

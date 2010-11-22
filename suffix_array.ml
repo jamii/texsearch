@@ -109,7 +109,7 @@ let find_exact sa latex =
 
 let approx_match sa latex1 k id =
   let latex2 = DynArray.get sa.latexs id in
-  let dist = Edit.left_edit_distance latex1 latex2 in
+  let dist = Latex.distance latex1 latex2 in
   if dist < k 
   then 
     let opaque = DynArray.get sa.opaques id in
@@ -135,7 +135,7 @@ let rec query_match sa query precision id =
     | Query.Latex (latex1,_) -> 
 	let k = int_of_float (ceil ((1.0 -. precision) *. (float_of_int (Latex.length latex1)))) in
 	let latex2 = DynArray.get sa.latexs id in
-	let dist = Edit.left_edit_distance latex1 latex2 in
+	let dist = Latex.distance latex1 latex2 in
 	if dist < k then Some dist else None
     | Query.And (query1, query2) -> 
 	begin
