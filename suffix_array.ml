@@ -94,7 +94,7 @@ let approx_match sa precision latexL id =
       None
 
 let gather_approx sa precision latex =
-  let k = int_of_float (ceil ((1.0 -. precision) *. (float_of_int (Latex.length latex)))) in
+  let k = Latex.cutoff precision latex in
   let ids = Hashset.create 0 in
   List.iter (gather_exact ids sa) (Latex.fragments latex k);
   ids

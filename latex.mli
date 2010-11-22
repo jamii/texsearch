@@ -14,5 +14,6 @@ val compare_suffix : (t * pos) -> (t * pos) -> int
 val is_prefix : (t * pos) -> (t * pos) -> bool
 val fragments : t -> int -> t list
 
+val cutoff : float -> t -> int
 val distance : t -> t -> int
 val similar : float -> t -> t -> int option

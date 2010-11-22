@@ -6,13 +6,6 @@ type t =
   | And of t * t
   | Or of t * t
 
-(* Longest latex string in query *)
-let rec max_length query =
-  match query with
-    | Latex (latex,_) -> Latex.length latex
-    | And (query1,query2) -> max (max_length query1) (max_length query2)
-    | Or (query1,query2) -> max (max_length query1) (max_length query2)
-
 let is_blank_string str = 
   let blank = ref true in
   String.iter
@@ -90,9 +83,7 @@ let rec distance query latexR =
 let rec similar precision query latexR =
   match query with
   | Latex (latexL,_) -> 
-      let k = int_of_float (ceil ((1.0 -. precision) *. (float_of_int (Latex.length latexL)))) in
-      let dist = Latex.distance latexL latexR in
-      if dist < k then Some dist else None
+      Latex.similar precision latexL latexR
   | And (query1, query2) -> 
       begin
 	match (similar precision query1 latexR, similar precision query2 latexR) with

@@ -74,6 +74,9 @@ let rec minimum (x : int) y z =
   if y < x then minimum y x z else
   if z < y then minimum x z y else x
 
+let cutoff precision latex =
+  int_of_float (ceil ((1.0 -. precision) *. (float_of_int (length latex))))
+
 (*
 Calculation of the Levensthein edit distance between two latex strings.
 The calculation is left-biased: the left string is matched to any substring of the right string
@@ -108,6 +111,5 @@ let distance latexL latexR =
   cache.(0).(0)
 
 let similar precision latexL latexR =
-  let cutoff = int_of_float (ceil ((1.0 -. precision) *. (float_of_int (length latexL)))) in
   let dist = distance latexL latexR in
-  if dist < cutoff then Some dist else None
+  if dist < cutoff precision latexL then Some dist else None
