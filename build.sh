@@ -6,6 +6,7 @@ ocamlfind ocamlmktop -linkpkg -g \
     -syntax camlp4o \
     -package json-static \
     dynArray.mli dynArray.ml \
+    hashset.mli hashset.ml \
     util.mli util.ml \
     latex.mli latex.ml \
     query.ml \
@@ -23,6 +24,7 @@ ocamlfind ocamlopt -linkpkg \
     -syntax camlp4o \
     -package json-static \
     dynArray.mli dynArray.ml \
+    hashset.mli hashset.ml \
     util.mli util.ml \
     pid.mli pid.ml \
     latex.mli latex.ml \
