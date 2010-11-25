@@ -58,7 +58,7 @@ def runTest(doi,transform):
     if results.getElementsByTagName("LimitExceeded"):
       print "Limit exceeded on doi: %s and eqnID: %s (%fs)" % (decodeDoi(doi), eqnID, endTime-startTime)
       return False
-    for result in results.getElementsByTagName("result"):
+    for result in results.getElementsByTagName("Article") + results.getElementsByTagName("Chapter"):
       if result.attributes.get('doi').value == decodeDoi(doi):
         for eqn in result.getElementsByTagName("equation"):
           if eqn.attributes.get('id').value == eqnID:
