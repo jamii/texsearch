@@ -1,5 +1,8 @@
 #!/bin/bash
 
+rm test
+rm index
+
 ocamlfind ocamlmktop -linkpkg -g \
     -package extlib \
     -package str \
