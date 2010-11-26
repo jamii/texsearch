@@ -28,6 +28,8 @@ let random_corpus n =
   let sa = Suffix_array.create () in
   Suffix_array.add sa items;
   Suffix_array.prepare sa;
+  let ((opaque,latex)::items) = items in
+  Suffix_array.delete sa ((=) opaque);
   (items, sa)
 
 let test_find test find n =

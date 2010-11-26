@@ -17,6 +17,9 @@ let create () =
   ; array = Array.make 0 (0,0)
   ; unsorted = []}
 
+let add sa latexs =
+  sa.unsorted <- latexs @ sa.unsorted
+
 let compare_suffix sa (id1,pos1) (id2,pos2) =
   let latexL, latexR = DynArray.get sa.latexs id1, DynArray.get sa.latexs id2 in
   Latex.compare_suffix (latexL,pos1) (latexR,pos2)
@@ -41,8 +44,16 @@ let prepare sa =
   sa.unsorted <- [];
   sa.array <- array
 
-let add sa latexs =
-  sa.unsorted <- latexs @ sa.unsorted
+let delete sa filter =
+  let deleted_ids = 
+    Util.filter_map
+      (fun id ->
+	if filter (DynArray.get sa.opaques id)
+        then Some id
+        else None)
+      (Util.range 0 (DynArray.length sa.opaques)) in
+  let retain (id, pos) = not (List.mem id deleted_ids) in
+  sa.array <- Array.of_list (List.filter retain (Array.to_list sa.array))
 
 let is_prefix sa latexL (id,pos) =
   let latexR = DynArray.get sa.latexs id in

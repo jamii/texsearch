@@ -265,9 +265,11 @@ let run_update index update =
     (* Start by deleting old version of the document if it already exists *)
     let index = 
       if not (Doi_map.mem update#id index.metadata) then index else
-      (* !!! delete stuff from sa *)
-      let metadata = Doi_map.remove update#id index.metadata in
-      {index with metadata=metadata} in
+      begin
+	Suffix_array.delete index.suffix_array (fun equation -> equation.doi = update#id); 
+	let metadata = Doi_map.remove update#id index.metadata in
+	{index with metadata=metadata} 
+      end in
     (* Add the new version of the documents if the deleted flag is not set *)
     match (update#doc, update#value#deleted) with
       | (None, _) | (_,true) -> 
