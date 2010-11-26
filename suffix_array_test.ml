@@ -21,13 +21,17 @@ let rec random_query max_length =
   | 1 -> Query.Or (random_query max_length, random_query max_length) 
   | _ -> Query.Latex (random_latex max_length, "")
 
-let test_find test find n =
+let random_corpus n =
   let latexs = random_list n (fun () -> random_latex 1000) in
   let opaques = random_list n (fun () -> random_string 1000) in
   let items = List.combine opaques latexs in
   let sa = Suffix_array.create () in
   Suffix_array.add sa items;
   Suffix_array.prepare sa;
+  (items, sa)
+
+let test_find test find n =
+  let (items, sa) = random_corpus n in
   let test_result = List.sort compare (test items) in
   let real_result = List.sort compare (List.map (fun (_,opaque) -> opaque) (find sa)) in
   if test_result <> real_result then Util.flush_line "Fail!" else Util.flush_line "Pass!";
@@ -82,4 +86,16 @@ let test_find_query n =
   let find sa =
     Suffix_array.find_query sa precision query in
   test_find test find n
-  
+
+let test_find_max_precision n =
+  let latexL = random_latex 5 in
+  let test items = 
+    Util.filter_map 
+      (fun (id,latexR) -> 
+	if exact_match latexL latexR
+	then Some id
+	else None)
+      items in
+  let find sa =
+    Suffix_array.find_approx sa 1.0 latexL in
+  test_find test find n
