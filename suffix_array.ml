@@ -114,7 +114,7 @@ let find_approx sa precision latex =
   let ids = gather_approx sa precision latex in
   Util.filter_map (approx_match sa precision latex) (Hashset.to_list ids)
 
-let rec query_match sa precision query id =
+let query_match sa precision query id =
   let latexR = DynArray.get sa.latexs id in
   match Query.similar precision query latexR with
   | Some dist ->
