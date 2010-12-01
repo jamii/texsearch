@@ -266,6 +266,7 @@ let run_update index update =
     let index = 
       if not (Doi_map.mem update#id index.metadata) then index else
       begin
+	Util.flush_line ("Deleting " ^ update#id);
 	Suffix_array.delete index.suffix_array (fun equation -> equation.doi = update#id); 
 	let metadata = Doi_map.remove update#id index.metadata in
 	{index with metadata=metadata} 
