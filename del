@@ -1,4 +1,5 @@
 #!/bin/bash
+ulimit -s unlimited
 dir=$(dirname $0)
 python $dir/db.py --del=$1
 $dir/index -update
