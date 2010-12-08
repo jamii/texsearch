@@ -95,6 +95,12 @@ let find_exact sa latex =
   gather_exact ids sa latex;
   List.map (exact_match sa) (Hashset.to_list ids)
 
+let gather_approx sa precision latex =
+  let k = Latex.cutoff precision latex in
+  let ids = Hashset.create 0 in
+  List.iter (gather_exact ids sa) (Latex.fragments latex k);
+  ids
+
 let approx_match sa precision latexL id =
   let latexR = DynArray.get sa.latexs id in
   match Latex.similar precision latexL latexR with
@@ -104,15 +110,15 @@ let approx_match sa precision latexL id =
   | None ->
       None
 
-let gather_approx sa precision latex =
-  let k = Latex.cutoff precision latex in
-  let ids = Hashset.create 0 in
-  List.iter (gather_exact ids sa) (Latex.fragments latex k);
-  ids
-
 let find_approx sa precision latex =
   let ids = gather_approx sa precision latex in
   Util.filter_map (approx_match sa precision latex) (Hashset.to_list ids)
+
+let rec gather_query sa precision query =
+  match query with
+  | Query.Latex (latex, _) -> gather_approx sa precision latex
+  | Query.And (query1, query2) -> Hashset.inter (gather_query sa precision query1) (gather_query sa precision query2)
+  | Query.Or (query1, query2) -> Hashset.union (gather_query sa precision query1) (gather_query sa precision query2)
 
 let query_match sa precision query id =
   let latexR = DynArray.get sa.latexs id in
@@ -124,10 +130,5 @@ let query_match sa precision query id =
       None
 
 let find_query sa precision query = 
-  let rec fq query = (* gather_query *)
-    match query with
-    | Query.Latex (latex, _) -> gather_approx sa precision latex
-    | Query.And (query1, query2) -> Hashset.inter (fq query1) (fq query2)
-    | Query.Or (query1, query2) -> Hashset.union (fq query1) (fq query2) in
-  let ids = fq query in
+  let ids = gather_query sa precision query in
   Util.filter_map (query_match sa precision query) (Hashset.to_list ids)

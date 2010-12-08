@@ -86,7 +86,7 @@ let distance latexL latexR =
   let maxl, maxr = Array.length latexL, Array.length latexR in
   if maxl = 0 then max_int else (* horrible hack, dont want empty strings to match anything *)
   if maxr = 0 then maxl else
-  (* cache.(l).(r) is the left_edit_distance between latexL[l to maxl] and latexR[r to maxr] *)
+  (* cache.(l).(r) is the distance between latexL[l to maxl] and latexR[r to maxr] *)
   let cache = Array.make_matrix (maxl + 1) (maxr + 1) 0 in
   (* Must match everything on the left *)
   for l = maxl - 1 downto 0 do
