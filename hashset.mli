@@ -10,3 +10,5 @@ val of_list : 'a list -> 'a t
 
 val union : 'a t -> 'a t -> 'a t
 val inter : 'a t -> 'a t -> 'a t
+
+val filter: ('a -> bool) -> 'a t -> unit

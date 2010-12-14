@@ -6,6 +6,7 @@ type pos = int
 type 'a t =
   { latexs : Latex.t DynArray.t 
   ; opaques : 'a DynArray.t
+  ; deleted : bool DynArray.t
   ; mutable next_id : id
   ; mutable array : (id * pos) array
   ; mutable unsorted : ('a * Latex.t) list }
@@ -13,6 +14,7 @@ type 'a t =
 let create () =
   { latexs = DynArray.create ()
   ; opaques = DynArray.create ()
+  ; deleted = DynArray.create ()
   ; next_id = 0
   ; array = Array.make 0 (0,0)
   ; unsorted = []}
@@ -34,6 +36,7 @@ let insert sa (opaque, latex) =
   sa.next_id <- id + 1;
   DynArray.add sa.opaques opaque;
   DynArray.add sa.latexs latex;
+  DynArray.add sa.deleted false;
   id
 
 let prepare sa =
@@ -52,8 +55,10 @@ let delete sa filter =
         then Some id
         else None)
       (Util.range 0 (DynArray.length sa.opaques)) in
-  let retain (id, pos) = not (List.mem id deleted_ids) in
-  sa.array <- Array.of_list (List.filter retain (Array.to_list sa.array))
+  List.iter (fun id -> DynArray.set sa.deleted id true) deleted_ids
+
+let filter_deleted sa ids =
+  Hashset.filter (fun id -> not (DynArray.get sa.deleted id)) ids
 
 let is_prefix sa latexL (id,pos) =
   let latexR = DynArray.get sa.latexs id in
@@ -93,6 +98,7 @@ let exact_match sa id =
 let find_exact sa latex =
   let ids = Hashset.create 0 in
   gather_exact ids sa latex;
+  filter_deleted sa ids;
   List.map (exact_match sa) (Hashset.to_list ids)
 
 let gather_approx sa precision latex =
@@ -112,6 +118,7 @@ let approx_match sa precision latexL id =
 
 let find_approx sa precision latex =
   let ids = gather_approx sa precision latex in
+  filter_deleted sa ids;
   Util.filter_map (approx_match sa precision latex) (Hashset.to_list ids)
 
 let rec gather_query sa precision query =
@@ -131,4 +138,5 @@ let query_match sa precision query id =
 
 let find_query sa precision query = 
   let ids = gather_query sa precision query in
+  filter_deleted sa ids;
   Util.filter_map (query_match sa precision query) (Hashset.to_list ids)

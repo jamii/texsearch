@@ -4,6 +4,7 @@ type pos = int
 type 'a t = 
   { latexs : Latex.t DynArray.t 
   ; opaques : 'a DynArray.t
+  ; deleted : bool DynArray.t
   ; mutable next_id : id
   ; mutable array : (id * pos) array 
   ; mutable unsorted :  ('a * Latex.t) list }

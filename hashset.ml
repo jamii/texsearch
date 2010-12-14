@@ -23,3 +23,11 @@ let inter ht1 ht2 =
   let ht3 = create 0 in
   Hashtbl.iter (fun key _ -> if mem ht2 key then add ht3 key else ()) ht1;
   ht3
+
+let filter f ht =
+  Hashtbl.iter
+    (fun elem _ ->
+      if f elem
+      then () 
+      else Hashtbl.remove ht elem) 
+    ht
