@@ -1,14 +1,14 @@
 open Util
 
-type id = int
-type pos = int
+type id = Suffix.id
+type pos = Suffix.pos
 
 type 'a t =
   { latexs : Latex.t DynArray.t 
   ; opaques : 'a DynArray.t
   ; deleted : bool DynArray.t
   ; mutable next_id : id
-  ; mutable array : (id * pos) array
+  ; mutable array : Suffix.t array
   ; mutable unsorted : ('a * Latex.t) list }
 
 let create () =
@@ -16,7 +16,7 @@ let create () =
   ; opaques = DynArray.create ()
   ; deleted = DynArray.create ()
   ; next_id = 0
-  ; array = Array.make 0 (0,0)
+  ; array = [||]
   ; unsorted = []}
 
 let add sa latexs =
@@ -29,7 +29,7 @@ let compare_suffix sa (id1,pos1) (id2,pos2) =
 let suffixes sa id =
   let latex = DynArray.get sa.latexs id in
   let n = Latex.length latex in
-  List.map (fun pos -> (id,pos)) (Util.range 0 n)
+  List.map (fun pos -> Suffix.pack (id,pos)) (Util.range 0 n)
 
 let insert sa (opaque, latex) =
   let id = sa.next_id in
@@ -42,7 +42,10 @@ let insert sa (opaque, latex) =
 let prepare sa =
   let ids = List.map (insert sa) sa.unsorted in
   let new_suffixes = Util.concat_map (suffixes sa) ids in
-  let cmp = compare_suffix sa in
+  let cmp suffix1 suffix2 = 
+    let (id1,pos1) = Suffix.unpack suffix1 in
+    let (id2,pos2) = Suffix.unpack suffix2 in
+    compare_suffix sa (id1,pos1) (id2,pos2) in
   let array = Array.of_list (List.merge cmp (List.fast_sort cmp new_suffixes) (Array.to_list sa.array)) in
   sa.unsorted <- [];
   sa.array <- array
@@ -76,13 +79,13 @@ let gather_exact ids sa latex =
   let rec narrow lo hi =
     let mid = lo + ((hi-lo) / 2) in
     if lo = mid then hi else
-    if leq sa latex sa.array.(mid)
+    if leq sa latex (Suffix.unpack sa.array.(mid))
     then narrow lo mid
     else narrow mid hi in
   let n = Array.length sa.array in
   let rec traverse index =
     if index >= n then () else
-    let (id, pos) = sa.array.(index) in
+    let (id, pos) = Suffix.unpack sa.array.(index) in
     if is_prefix sa latex (id, pos)
     then
       begin

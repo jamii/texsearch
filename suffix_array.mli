@@ -6,7 +6,7 @@ type 'a t =
   ; opaques : 'a DynArray.t
   ; deleted : bool DynArray.t
   ; mutable next_id : id
-  ; mutable array : (id * pos) array 
+  ; mutable array : Suffix.t array 
   ; mutable unsorted :  ('a * Latex.t) list }
 
 val create : unit -> 'a t

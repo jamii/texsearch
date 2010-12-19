@@ -14,7 +14,9 @@ ocamlfind ocamlmktop -linkpkg -g \
     util.mli util.ml \
     latex.mli latex.ml \
     query.mli query.ml \
+    suffix.mli suffix.ml \
     suffix_array.mli suffix_array.ml \
+    suffix_test.ml \
     suffix_array_test.ml \
 -o test
 
@@ -34,6 +36,7 @@ ocamlfind ocamlopt -linkpkg \
     pid.mli pid.ml \
     latex.mli latex.ml \
     query.mli query.ml \
+    suffix.mli suffix.ml \
     suffix_array.mli suffix_array.ml \
     index.ml \
 -o index
