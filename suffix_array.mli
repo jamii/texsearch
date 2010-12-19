@@ -10,6 +10,8 @@ type 'a t =
   ; mutable unsorted :  ('a * Latex.t) list }
 
 val create : unit -> 'a t
+val ancientify : 'a t -> unit
+
 val add : 'a t -> ('a * Latex.t) list -> unit
 val prepare : 'a t -> unit
 

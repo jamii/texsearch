@@ -218,6 +218,7 @@ let handle_query index str =
 
 let handle_queries () =
   let index = load_index () in
+  Suffix_array.ancientify index.suffix_array;
   while true do
     let input = input_line stdin in
     let json = handle_query index input in

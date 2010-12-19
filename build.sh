@@ -8,6 +8,7 @@ ocamlfind ocamlmktop -linkpkg -g \
     -package str \
     -syntax camlp4o \
     -package json-static \
+    -package ancient \
     dynArray.mli dynArray.ml \
     hashset.mli hashset.ml \
     myMap.mli myMap.ml \
@@ -25,6 +26,7 @@ ocamlfind ocamlopt -linkpkg \
     -package netclient \
     -package json-wheel \
     -package json-static \
+    -package ancient \
     -package xml-light \
     -package str \
     -syntax camlp4o \

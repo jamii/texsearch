@@ -19,6 +19,10 @@ let create () =
   ; array = [||]
   ; unsorted = []}
 
+let ancientify sa =
+  sa.array <- Ancient.follow (Ancient.mark sa.array);
+  Gc.full_major ()
+
 let add sa latexs =
   sa.unsorted <- latexs @ sa.unsorted
 
