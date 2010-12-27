@@ -315,7 +315,6 @@ let run_updates () =
 
 (* Introspection *)
 
-(*
 let list_all () =
   flush_line ("couchdb is at " ^ couchdb_url);
   flush_line "Loading index";
@@ -347,16 +346,6 @@ let list_one doi =
   with Not_found ->
     flush_line "DOI not indexed"
 
-let list_nodes () =
-  flush_line ("couchdb is at " ^ couchdb_url);
-  flush_line "Loading index";
-  let index = load_index () in
-  List.iter
-    (fun equation ->
-      flush_line (string_of_int (Array.length equation.latex)))
-    (Index_tree.to_list index.index_tree)
-*)
-
 (* Main *)
 
 open Arg
@@ -364,8 +353,7 @@ let _ = parse
   [("-init", Unit init_index, ": Create an empty index")
   ;("-update", Unit run_updates, ": Update the index")
   ;("-query", Unit handle_queries, ": Handle index queries as a couchdb _external")
-  (*;("-list_all", Unit list_all, ": List all indexed keys")
-  ;("-list", String list_one, ": List the entry for a given key")
-  ;("-list_nodes", Unit list_nodes, ": Debugging tool: list the lengths of each equation node")*)]
+  ;("-list_all", Unit list_all, ": List all indexed keys")
+  ;("-list", String list_one, ": List the entry for a given key")]
   ignore
   "Use 'index -help' for available options"
