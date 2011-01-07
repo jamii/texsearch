@@ -45,14 +45,24 @@ let insert sa (opaque, latex) =
 
 let prepare sa =
   let ids = List.map (insert sa) sa.unsorted in
+  sa.unsorted <- [];
   let new_suffixes = Util.concat_map (suffixes sa) ids in
+  let old_len = Array.length sa.array in
+  let new_len = List.length new_suffixes in
+  let array = Array.make (old_len + new_len) (Suffix.pack (0,0)) in
+  Array.blit sa.array 0 array 0 old_len;
+  let index = ref old_len in
+  List.iter 
+    (fun suffix -> 
+      array.(!index) <- suffix; 
+      index := !index + 1)
+    new_suffixes;
+  sa.array <- array;
   let cmp suffix1 suffix2 = 
     let (id1,pos1) = Suffix.unpack suffix1 in
     let (id2,pos2) = Suffix.unpack suffix2 in
     compare_suffix sa (id1,pos1) (id2,pos2) in
-  let array = Array.of_list (List.merge cmp (List.fast_sort cmp new_suffixes) (Array.to_list sa.array)) in
-  sa.unsorted <- [];
-  sa.array <- array
+  Array.fast_sort cmp sa.array
 
 let delete sa filter =
   let deleted_ids = 
