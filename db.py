@@ -98,7 +98,7 @@ def parseChapter(chapter):
 def parseBook(book):
   bookDOI = book.getElementsByTagName("BookDOI")[0].childNodes[0].wholeText
 
-  publicationDate = article.getElementsByTagName("BookCopyright")
+  publicationDate = book.getElementsByTagName("BookCopyright")
   if publicationDate:
     publicationYear = publicationDate[0].getElementsByTagName("CopyrightYear")[0].childNodes[0].wholeText
   else:
