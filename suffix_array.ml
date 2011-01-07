@@ -51,13 +51,13 @@ let prepare sa =
   let new_len = List.length new_suffixes in
   let array = Array.make (old_len + new_len) (Suffix.pack (0,0)) in
   Array.blit sa.array 0 array 0 old_len;
+  sa.array <- array;
   let index = ref old_len in
   List.iter 
     (fun suffix -> 
       array.(!index) <- suffix; 
       index := !index + 1)
     new_suffixes;
-  sa.array <- array;
   let cmp suffix1 suffix2 = 
     let (id1,pos1) = Suffix.unpack suffix1 in
     let (id2,pos2) = Suffix.unpack suffix2 in
