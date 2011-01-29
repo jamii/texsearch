@@ -1,7 +1,7 @@
 #!/bin/bash
 ulimit -s unlimited
 dir=$(dirname $0)
-python $dir/db.py --del=$1
+python $dir/scripts/db.py --del=$1
 $dir/index -update
 $dir/stop
 $dir/start
