@@ -1,3 +1,5 @@
+(* Prevents multiple update processes from running in parrallel *)
+
 let lock () =
   try
     Util.flush_line "Checking pid file";

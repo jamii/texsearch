@@ -1,3 +1,5 @@
+(* Packed representations of suffixes of strings. Used by suffix_array *)
+
 type id = int
 type pos = int
 

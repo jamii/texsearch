@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+
+""" Handles parsing Springer documents and adding/deleting document entries to/from couchdb  """
+
 import re
 import sys, httplib, urllib
 from xml.dom import minidom

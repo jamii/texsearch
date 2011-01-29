@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+
+""" Replay existing searches found in couchdb logs """
+
 import sys
 import re
 import search

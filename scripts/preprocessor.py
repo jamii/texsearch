@@ -1,5 +1,7 @@
 #!/bin/env python
 
+""" Parses and preprocesses LaTeX formulae using PlasTeX """ 
+
 import string, re
 from plasTeX import TeXFragment, TeXDocument
 import plasTeX.Context

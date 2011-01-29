@@ -1,3 +1,5 @@
+(* Modified version of ExtLib DynArray - contains no functional values so is safer for Marshal *)
+
 (*
  * DynArray - Resizeable Ocaml arrays
  * Copyright (C) 2003 Brian Hurt

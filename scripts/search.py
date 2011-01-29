@@ -1,4 +1,7 @@
 #!/bin/env python
+
+""" Python interface to the index external service running on couchdb """
+
 import urllib
 import time
 from xml.dom import minidom

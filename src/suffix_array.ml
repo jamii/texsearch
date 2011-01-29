@@ -1,3 +1,8 @@
+(* 
+Suffix arrays storing compressed latex formulae.
+Allows neighbourhood search by Latex.distance
+*)
+
 open Util
 
 type id = Suffix.id
@@ -43,6 +48,7 @@ let insert sa (opaque, latex) =
   DynArray.add sa.deleted false;
   id
 
+(* a little convoluted to keep memory usage as low as possible *)
 let prepare sa =
   let ids = List.map (insert sa) sa.unsorted in
   sa.unsorted <- [];
@@ -85,6 +91,8 @@ let leq sa latexL (id,pos) =
   let latexR = DynArray.get sa.latexs id in
   (Latex.compare_suffix (latexL,0) (latexR,pos)) <= 0
 
+(* Exact searching *)
+
 (* binary search *)
 let gather_exact ids sa latex =
   (* find beginning of region *)
@@ -118,6 +126,13 @@ let find_exact sa latex =
   filter_deleted sa ids;
   List.map (exact_match sa) (Hashset.to_list ids)
 
+(* Searching by Latex.distance *)
+
+(*
+The logic behind the approx search is as follows:
+Suppose    Latex.distance latex corpus_term < k
+Then       List.exists (fun fragment -> Latex.distance fragment corpus_term = 0) (Latex.fragments latex k) 
+*)
 let gather_approx sa precision latex =
   let k = Latex.cutoff precision latex in
   let ids = Hashset.create 0 in
@@ -137,6 +152,8 @@ let find_approx sa precision latex =
   let ids = gather_approx sa precision latex in
   filter_deleted sa ids;
   Util.filter_map (approx_match sa precision latex) (Hashset.to_list ids)
+
+(* Searching by Query.distance *)
 
 let rec gather_query sa precision query =
   match query with

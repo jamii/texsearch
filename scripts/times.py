@@ -1,4 +1,7 @@
 #!/bin/env python
+
+""" Benchmarking for the index external service running on couchdb """
+
 import os, sys, httplib, urllib, socket
 import random
 import couchdb.client

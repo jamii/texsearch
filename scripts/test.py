@@ -1,4 +1,7 @@
 #!/bin/env python
+
+""" Whitebox testing of the index external service running on couchdb """
+
 import os, sys, httplib, urllib, socket
 from xml.dom import minidom
 from util import decodeDoi
