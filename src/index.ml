@@ -95,9 +95,9 @@ type index =
 
 (* Persisting *)
 
-let load_index () = (Util.load_data "./index_store" : index)
+let load_index () = (Util.load_data "./data/index" : index)
 
-let save_index index = Util.save_data "./index_store" (index : index)
+let save_index index = Util.save_data "./data/index" (index : index)
 
 (* Database interaction *)
 
