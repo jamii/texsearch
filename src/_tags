@@ -1,0 +1,1 @@
+<*> : syntax(camlp4o), package(extlib), package(netclient), package(json-wheel), package(json-static), package(ancient), package(xml-light), package(str), package(unix)
