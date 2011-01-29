@@ -232,7 +232,6 @@ let init_index () =
   if read_line () = "y"
   then
     (flush_line "Saving index";
-    (* We stick a dummy node at the base of the tree so we don't have to deal with empty trees *)
     save_index {last_update = -1; suffix_array = Suffix_array.create (); metadata = Doi_map.empty};
     flush_line "Ok")
   else
