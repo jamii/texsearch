@@ -7,7 +7,7 @@ from util import encodeDoi
 
 def parseResults(results):
   db = couchdb_server['documents']
-  for result in results.getElementsByTagName("result"):
+  for result in results.getElementsByTagName("Article") + results.getElementsByTagName("Book"):
     doi = result.attributes.get('doi').value
     source = db[encodeDoi(doi)]['source']
     eqns = [(eqn.attributes.get('id').value, eqn.attributes.get('distance').value) for eqn in result.getElementsByTagName("equation")]
