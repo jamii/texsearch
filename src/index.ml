@@ -174,7 +174,6 @@ let run_query index query precision filter limit start count =
         Doi_map.update key (fun values -> value::values) [value] doi_map)
       Doi_map.empty      
       eqns in
-  (* TODO Remove duplicate eqnID resulting from matches on multiple lines *)
   (* Remove the dummy node *)
   let doi_map = Doi_map.remove "" doi_map in
   if Doi_map.count doi_map > limit 
