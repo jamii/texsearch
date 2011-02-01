@@ -202,10 +202,14 @@ let handle_query index str =
     let start = int_of_string args#start in
     let count = int_of_string args#count in
     let query = Query.of_string (preprocess preprocessorTimeout) args#searchTerm in
-    let precision = float_of_string args#precision in
+    let precision = float_of_string args#precision in 
+    let dois = 
+      match args#doi with
+      |	None -> []
+      |	Some csv -> ExtString.String.nsplit csv "," in
     let filter doi metadata = 
           ((args#containerID = None) || (args#containerID = metadata.containerID))
-      &&  ((args#doi = None) || (args#doi = Some (decode_doi doi)))
+      &&  ((args#doi = None) || (List.mem doi dois))
       &&  ((args#publishedBefore = None) || ((args#publishedBefore >= metadata.publicationYear) && (metadata.publicationYear <> None)))
       &&  ((args#publishedAfter  = None) || ((args#publishedAfter  <= metadata.publicationYear) && (metadata.publicationYear <> None))) in
     xml_response (with_timeout searchTimeout (fun () -> run_query index query precision filter limit start count))
