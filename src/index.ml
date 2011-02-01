@@ -209,7 +209,7 @@ let handle_query index str =
       |	Some csv -> ExtString.String.nsplit csv "," in
     let filter doi metadata = 
           ((args#containerID = None) || (args#containerID = metadata.containerID))
-      &&  ((args#doi = None) || (List.mem doi dois))
+      &&  ((args#doi = None) || (List.mem (decode_doi doi) dois))
       &&  ((args#publishedBefore = None) || ((args#publishedBefore >= metadata.publicationYear) && (metadata.publicationYear <> None)))
       &&  ((args#publishedAfter  = None) || ((args#publishedAfter  <= metadata.publicationYear) && (metadata.publicationYear <> None))) in
     xml_response (with_timeout searchTimeout (fun () -> run_query index query precision filter limit start count))
