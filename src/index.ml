@@ -19,19 +19,24 @@ and document =
   ; content : (string * Json_type.t) assoc (* eqnID*Latex.t *)
   ; source : (string * string) assoc > (* eqnID*string *)
 
-and request =
-  < args "query" :
-    < searchTerm : string
-    ; ?searchTimeout : string = "10.0"
-    ; ?preprocessorTimeout : string = "5.0"
-    ; ?limit : string = "1000"
-    ; ?start : string = "0"
-    ; ?count : string = string_of_int max_int
-    ; ?doi : string option 
-    ; ?containerID : containerID option
-    ; ?publishedAfter : publicationYear option
-    ; ?publishedBefore : publicationYear option
-    ; ?precision : string = "0.7" > >
+and args =
+  < searchTerm : string
+  ; ?searchTimeout : string = "10.0"
+  ; ?preprocessorTimeout : string = "5.0"
+  ; ?limit : string = "1000"
+  ; ?start : string = "0"
+  ; ?count : string = string_of_int max_int
+  ; ?doi : string option 
+  ; ?containerID : containerID option
+  ; ?publishedAfter : publicationYear option
+  ; ?publishedBefore : publicationYear option
+  ; ?precision : string = "0.7" >
+
+and get =
+  < query : args >
+
+and post =
+  < body : string >
 
 and update =
   < id : doi
@@ -195,7 +200,14 @@ let run_query index query precision filter limit start count =
 
 let handle_query index str =
   try
-    let args = (request_of_json (Json_io.json_of_string str))#args in
+    let args = 
+      let json = Json_io.json_of_string str in
+      (* accept args either as query string or as post body *)
+      try 
+	(get_of_json json)#query
+      with Json_type.Json_error _ ->
+	let json = Json_io.json_of_string (post_of_json json)#body in
+        args_of_json json in
     let searchTimeout = float_of_string args#searchTimeout in
     let preprocessorTimeout = args#preprocessorTimeout in
     let limit = int_of_string args#limit in
