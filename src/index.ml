@@ -215,12 +215,16 @@ let handle_query index str =
     let count = int_of_string args#count in
     let query = Query.of_string (preprocess preprocessorTimeout) args#searchTerm in
     let precision = float_of_string args#precision in 
+    let containerIDs = 
+      match args#containerID with
+      |	None -> []
+      |	Some csv -> ExtString.String.nsplit csv "," in
     let dois = 
       match args#doi with
       |	None -> []
       |	Some csv -> ExtString.String.nsplit csv "," in
     let filter doi metadata = 
-          ((args#containerID = None) || (args#containerID = metadata.containerID))
+          ((args#containerID = None) || (List.exists (fun containerID -> metadata.containerID = Some containerID) containerIDs))
       &&  ((args#doi = None) || (List.mem (decode_doi doi) dois))
       &&  ((args#publishedBefore = None) || ((args#publishedBefore >= metadata.publicationYear) && (metadata.publicationYear <> None)))
       &&  ((args#publishedAfter  = None) || ((args#publishedAfter  <= metadata.publicationYear) && (metadata.publicationYear <> None))) in
