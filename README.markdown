@@ -2,7 +2,9 @@ Texsearch is a search index specialised for LaTeX equations, forming part of the
 
 Every LaTeX equation in the corpus is parsed and evaluated on entry to produce an AST. The similarity between a pair of equations is calculated as the Levenshtein distance between their respective ASTs as a fraction of the total size of the ASTs. Given a LateX equation as a search term, texsearch will retrieve all equations in the corpus whose similarity to the search term falls under a specified margin.
 
-The index is based on a suffix array which is capable of performing vicinity searches over any quasi-metric space using any query function satisfying:
+The index uses a suffix array to quickly calculate a superset of the search results by finding exact matches of fragments of the search term.
+
+Previous versions use a modified bk-tree which is capable of performing vicinity searches over any quasi-metric space using any query function satisfying:
 
     For all a. query a >= 0
     For all a, b. query b - query a <= dist a b
